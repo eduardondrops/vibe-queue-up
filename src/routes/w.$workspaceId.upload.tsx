@@ -3,35 +3,51 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { appendToQueue, recomputeQueue } from "@/lib/queue";
+import { appendToQueue } from "@/lib/queue";
+import { getMyRole, getWorkspace, type Workspace } from "@/lib/workspaces";
 import { Upload, Film, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/admin")({
+export const Route = createFileRoute("/w/$workspaceId/upload")({
   head: () => ({
     meta: [
-      { title: "Upload — ReelQueue" },
-      { name: "description", content: "Adicione um vídeo à fila de Reels." },
+      { title: "Upload — PostFlow" },
+      { name: "description", content: "Adicione um vídeo à fila." },
     ],
   }),
-  component: AdminPage,
+  component: UploadPage,
 });
 
-function AdminPage() {
-  const { user, isAdmin, loading } = useAuth();
+function UploadPage() {
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const { workspaceId } = Route.useParams();
+  const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  const [allowed, setAllowed] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (loading) return;
-    if (!user) navigate({ to: "/auth" });
-    else if (!isAdmin) navigate({ to: "/" });
-  }, [loading, user, isAdmin, navigate]);
+    if (!loading && !user) navigate({ to: "/auth" });
+  }, [loading, user, navigate]);
 
-  if (loading || !user || !isAdmin) {
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const w = await getWorkspace(workspaceId);
+      setWorkspace(w);
+      const role = await getMyRole(workspaceId);
+      const can = role === "owner" || role === "editor";
+      setAllowed(can);
+      if (!w || !can) {
+        toast.error("Você não tem permissão para enviar neste perfil");
+        navigate({ to: "/w/$workspaceId", params: { workspaceId } });
+      }
+    })();
+  }, [workspaceId, user, navigate]);
+
+  if (loading || !user || !workspace || allowed !== true) {
     return (
       <div className="flex min-h-screen items-center justify-center text-muted-foreground">
         Carregando...
@@ -40,15 +56,15 @@ function AdminPage() {
   }
 
   return (
-    <AppShell>
-      <UploadForm />
+    <AppShell workspaceId={workspaceId} workspaceName={workspace.name}>
+      <UploadForm workspaceId={workspaceId} />
     </AppShell>
   );
 }
 
-function UploadForm() {
+function UploadForm({ workspaceId }: { workspaceId: string }) {
   const [file, setFile] = useState<File | null>(null);
-  const [caption, setCaption] = useState("");
+  const [baseText, setBaseText] = useState("");
   const [hashtags, setHashtags] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [progressLabel, setProgressLabel] = useState("");
@@ -68,7 +84,7 @@ function UploadForm() {
     try {
       setProgressLabel("Enviando vídeo...");
       const ext = file.name.split(".").pop() || "mp4";
-      const path = `${crypto.randomUUID()}.${ext}`;
+      const path = `${workspaceId}/${crypto.randomUUID()}.${ext}`;
 
       const { error: upErr } = await supabase.storage
         .from("videos")
@@ -79,27 +95,21 @@ function UploadForm() {
       if (upErr) throw upErr;
 
       setProgressLabel("Adicionando à fila...");
-      // Note: video_url is kept for backwards compatibility but is no longer
-      // a public URL. Signed URLs are generated on demand when displaying videos.
       await appendToQueue({
-        videoUrl: path,
+        workspaceId,
         storagePath: path,
-        caption: caption.trim(),
+        baseText: baseText.trim(),
         hashtags: hashtags.trim(),
       });
 
-      // Ensure consistent ordering even if multiple uploads happen
-      await recomputeQueue();
-
       toast.success("Vídeo adicionado à fila");
       setFile(null);
-      setCaption("");
+      setBaseText("");
       setHashtags("");
-      (document.getElementById("video-file") as HTMLInputElement | null) &&
-        ((document.getElementById("video-file") as HTMLInputElement).value = "");
+      const input = document.getElementById("video-file") as HTMLInputElement | null;
+      if (input) input.value = "";
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Erro ao enviar";
-      toast.error(message);
+      toast.error(err instanceof Error ? err.message : "Erro ao enviar");
     } finally {
       setSubmitting(false);
       setProgressLabel("");
@@ -110,13 +120,13 @@ function UploadForm() {
     <div>
       <div className="mb-6">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">
-          Admin
+          Upload
         </p>
         <h1 className="mt-1 font-display text-3xl font-bold">
           Adicionar à <span className="grad-text">fila</span>
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          1 vídeo por envio. A fila distribui automaticamente em 3 horários por dia.
+          1 vídeo por envio. A fila distribui em 3 horários por dia.
         </p>
       </div>
 
@@ -156,25 +166,28 @@ function UploadForm() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="caption">Legenda</Label>
+          <Label htmlFor="baseText">Texto base</Label>
           <Textarea
-            id="caption"
-            value={caption}
-            onChange={(e) => setCaption(e.target.value)}
+            id="baseText"
+            value={baseText}
+            onChange={(e) => setBaseText(e.target.value)}
             rows={3}
-            placeholder="Escreva a legenda..."
+            placeholder="Escreva o texto base da legenda..."
             maxLength={2200}
           />
+          <p className="text-[11px] text-muted-foreground">
+            CTA e hashtags serão adicionados automaticamente por plataforma.
+          </p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="hashtags">Hashtags</Label>
+          <Label htmlFor="hashtags">Hashtags base</Label>
           <Textarea
             id="hashtags"
             value={hashtags}
             onChange={(e) => setHashtags(e.target.value)}
             rows={2}
-            placeholder="#reels #viral #fyp"
+            placeholder="#viral #fyp"
             maxLength={500}
           />
         </div>

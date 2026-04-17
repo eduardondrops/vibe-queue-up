@@ -3,24 +3,19 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/integrations/supabase/client";
-import { dayKey, slotLabelForDate } from "@/lib/scheduling";
+import { slotLabelForDate } from "@/lib/scheduling";
 import { markPosted, skipVideo, type QueueVideo } from "@/lib/queue";
+import { getWorkspace, type Workspace } from "@/lib/workspaces";
 import { Button } from "@/components/ui/button";
 import { PlatformCaptions } from "@/components/PlatformCaptions";
-import {
-  ChevronLeft,
-  Download,
-  Check,
-  SkipForward,
-  Loader2,
-} from "lucide-react";
+import { ChevronLeft, Download, Check, SkipForward, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/day/$date")({
+export const Route = createFileRoute("/w/$workspaceId/day/$date")({
   head: ({ params }) => ({
     meta: [
-      { title: `Vídeos do dia ${params.date} — ReelQueue` },
-      { name: "description", content: "Lista de vídeos agendados para o dia." },
+      { title: `Vídeos do dia ${params.date} — PostFlow` },
+      { name: "description", content: "Vídeos agendados para o dia." },
     ],
   }),
   component: DayPage,
@@ -29,13 +24,22 @@ export const Route = createFileRoute("/day/$date")({
 function DayPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const { date } = Route.useParams();
+  const { workspaceId, date } = Route.useParams();
+  const [workspace, setWorkspace] = useState<Workspace | null>(null);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
   }, [loading, user, navigate]);
 
-  if (loading || !user) {
+  useEffect(() => {
+    if (!user) return;
+    getWorkspace(workspaceId).then((w) => {
+      setWorkspace(w);
+      if (!w) navigate({ to: "/" });
+    });
+  }, [workspaceId, user, navigate]);
+
+  if (loading || !user || !workspace) {
     return (
       <div className="flex min-h-screen items-center justify-center text-muted-foreground">
         Carregando...
@@ -44,13 +48,13 @@ function DayPage() {
   }
 
   return (
-    <AppShell>
-      <DayList dateKey={date} />
+    <AppShell workspaceId={workspaceId} workspaceName={workspace.name}>
+      <DayList workspaceId={workspaceId} dateKey={date} />
     </AppShell>
   );
 }
 
-function DayList({ dateKey: dKey }: { dateKey: string }) {
+function DayList({ workspaceId, dateKey: dKey }: { workspaceId: string; dateKey: string }) {
   const [videos, setVideos] = useState<QueueVideo[]>([]);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -65,8 +69,9 @@ function DayList({ dateKey: dKey }: { dateKey: string }) {
     const { data, error } = await supabase
       .from("videos")
       .select(
-        "id, video_url, storage_path, caption, hashtags, status, queue_position, scheduled_at, created_at",
+        "id, workspace_id, video_url, storage_path, caption, base_text, hashtags, status, queue_position, scheduled_at, posted_at, uploaded_by, created_at",
       )
+      .eq("workspace_id", workspaceId)
       .gte("scheduled_at", start.toISOString())
       .lte("scheduled_at", end.toISOString())
       .order("scheduled_at", { ascending: true });
@@ -80,7 +85,6 @@ function DayList({ dateKey: dKey }: { dateKey: string }) {
     const list = (data ?? []) as QueueVideo[];
     setVideos(list);
 
-    // Generate short-lived signed URLs (1h TTL) for the private bucket.
     const urls: Record<string, string> = {};
     await Promise.all(
       list.map(async (v) => {
@@ -92,7 +96,7 @@ function DayList({ dateKey: dKey }: { dateKey: string }) {
     );
     setSignedUrls(urls);
     setLoading(false);
-  }, [dKey]);
+  }, [dKey, workspaceId]);
 
   useEffect(() => {
     load();
@@ -123,7 +127,7 @@ function DayList({ dateKey: dKey }: { dateKey: string }) {
   async function handleSkip(id: string) {
     setBusyId(id);
     try {
-      await skipVideo(id);
+      await skipVideo(id, workspaceId);
       toast.success("Vídeo movido para o fim da fila");
       await load();
     } catch (err) {
@@ -133,12 +137,11 @@ function DayList({ dateKey: dKey }: { dateKey: string }) {
     }
   }
 
-  // Copy is now handled per-platform inside PlatformCaptions.
-
   return (
     <div>
       <Link
-        to="/"
+        to="/w/$workspaceId"
+        params={{ workspaceId }}
         className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ChevronLeft className="h-4 w-4" /> Calendário
@@ -196,6 +199,8 @@ function VideoCard({
     skipped: { label: "Pulado", cls: "bg-muted text-muted-foreground" },
   }[video.status];
 
+  const baseText = video.base_text || video.caption;
+
   return (
     <article className="glass overflow-hidden rounded-2xl shadow-[var(--shadow-card)]">
       <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
@@ -225,11 +230,8 @@ function VideoCard({
       />
 
       <div className="space-y-4 p-4">
-        {(video.caption || video.hashtags) && (
-          <PlatformCaptions
-            baseText={video.caption}
-            hashtags={video.hashtags}
-          />
+        {(baseText || video.hashtags) && (
+          <PlatformCaptions baseText={baseText} hashtags={video.hashtags} />
         )}
 
         {video.status === "pending" && (

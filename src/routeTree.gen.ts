@@ -10,18 +10,15 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as DayDateRouteImport } from './routes/day.$date'
+import { Route as WWorkspaceIdIndexRouteImport } from './routes/w.$workspaceId.index'
+import { Route as WWorkspaceIdUploadRouteImport } from './routes/w.$workspaceId.upload'
+import { Route as WWorkspaceIdSettingsRouteImport } from './routes/w.$workspaceId.settings'
+import { Route as WWorkspaceIdDayDateRouteImport } from './routes/w.$workspaceId.day.$date'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminRoute = AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -29,44 +26,86 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DayDateRoute = DayDateRouteImport.update({
-  id: '/day/$date',
-  path: '/day/$date',
+const WWorkspaceIdIndexRoute = WWorkspaceIdIndexRouteImport.update({
+  id: '/w/$workspaceId/',
+  path: '/w/$workspaceId/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WWorkspaceIdUploadRoute = WWorkspaceIdUploadRouteImport.update({
+  id: '/w/$workspaceId/upload',
+  path: '/w/$workspaceId/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WWorkspaceIdSettingsRoute = WWorkspaceIdSettingsRouteImport.update({
+  id: '/w/$workspaceId/settings',
+  path: '/w/$workspaceId/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WWorkspaceIdDayDateRoute = WWorkspaceIdDayDateRouteImport.update({
+  id: '/w/$workspaceId/day/$date',
+  path: '/w/$workspaceId/day/$date',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
-  '/day/$date': typeof DayDateRoute
+  '/w/$workspaceId/settings': typeof WWorkspaceIdSettingsRoute
+  '/w/$workspaceId/upload': typeof WWorkspaceIdUploadRoute
+  '/w/$workspaceId/': typeof WWorkspaceIdIndexRoute
+  '/w/$workspaceId/day/$date': typeof WWorkspaceIdDayDateRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
-  '/day/$date': typeof DayDateRoute
+  '/w/$workspaceId/settings': typeof WWorkspaceIdSettingsRoute
+  '/w/$workspaceId/upload': typeof WWorkspaceIdUploadRoute
+  '/w/$workspaceId': typeof WWorkspaceIdIndexRoute
+  '/w/$workspaceId/day/$date': typeof WWorkspaceIdDayDateRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
-  '/day/$date': typeof DayDateRoute
+  '/w/$workspaceId/settings': typeof WWorkspaceIdSettingsRoute
+  '/w/$workspaceId/upload': typeof WWorkspaceIdUploadRoute
+  '/w/$workspaceId/': typeof WWorkspaceIdIndexRoute
+  '/w/$workspaceId/day/$date': typeof WWorkspaceIdDayDateRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/auth' | '/day/$date'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/w/$workspaceId/settings'
+    | '/w/$workspaceId/upload'
+    | '/w/$workspaceId/'
+    | '/w/$workspaceId/day/$date'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/auth' | '/day/$date'
-  id: '__root__' | '/' | '/admin' | '/auth' | '/day/$date'
+  to:
+    | '/'
+    | '/auth'
+    | '/w/$workspaceId/settings'
+    | '/w/$workspaceId/upload'
+    | '/w/$workspaceId'
+    | '/w/$workspaceId/day/$date'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/w/$workspaceId/settings'
+    | '/w/$workspaceId/upload'
+    | '/w/$workspaceId/'
+    | '/w/$workspaceId/day/$date'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AdminRoute: typeof AdminRoute
   AuthRoute: typeof AuthRoute
-  DayDateRoute: typeof DayDateRoute
+  WWorkspaceIdSettingsRoute: typeof WWorkspaceIdSettingsRoute
+  WWorkspaceIdUploadRoute: typeof WWorkspaceIdUploadRoute
+  WWorkspaceIdIndexRoute: typeof WWorkspaceIdIndexRoute
+  WWorkspaceIdDayDateRoute: typeof WWorkspaceIdDayDateRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -78,13 +117,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -92,11 +124,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/day/$date': {
-      id: '/day/$date'
-      path: '/day/$date'
-      fullPath: '/day/$date'
-      preLoaderRoute: typeof DayDateRouteImport
+    '/w/$workspaceId/': {
+      id: '/w/$workspaceId/'
+      path: '/w/$workspaceId'
+      fullPath: '/w/$workspaceId/'
+      preLoaderRoute: typeof WWorkspaceIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/w/$workspaceId/upload': {
+      id: '/w/$workspaceId/upload'
+      path: '/w/$workspaceId/upload'
+      fullPath: '/w/$workspaceId/upload'
+      preLoaderRoute: typeof WWorkspaceIdUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/w/$workspaceId/settings': {
+      id: '/w/$workspaceId/settings'
+      path: '/w/$workspaceId/settings'
+      fullPath: '/w/$workspaceId/settings'
+      preLoaderRoute: typeof WWorkspaceIdSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/w/$workspaceId/day/$date': {
+      id: '/w/$workspaceId/day/$date'
+      path: '/w/$workspaceId/day/$date'
+      fullPath: '/w/$workspaceId/day/$date'
+      preLoaderRoute: typeof WWorkspaceIdDayDateRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -104,9 +157,11 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AdminRoute: AdminRoute,
   AuthRoute: AuthRoute,
-  DayDateRoute: DayDateRoute,
+  WWorkspaceIdSettingsRoute: WWorkspaceIdSettingsRoute,
+  WWorkspaceIdUploadRoute: WWorkspaceIdUploadRoute,
+  WWorkspaceIdIndexRoute: WWorkspaceIdIndexRoute,
+  WWorkspaceIdDayDateRoute: WWorkspaceIdDayDateRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
