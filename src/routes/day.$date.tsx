@@ -133,14 +133,7 @@ function DayList({ dateKey: dKey }: { dateKey: string }) {
     }
   }
 
-  async function copy(text: string, label: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success(`${label} copiada`);
-    } catch {
-      toast.error("Não foi possível copiar");
-    }
-  }
+  // Copy is now handled per-platform inside PlatformCaptions.
 
   return (
     <div>
@@ -175,7 +168,6 @@ function DayList({ dateKey: dKey }: { dateKey: string }) {
               busy={busyId === v.id}
               onPosted={() => handlePosted(v.id)}
               onSkip={() => handleSkip(v.id)}
-              onCopy={copy}
             />
           ))}
         </div>
@@ -190,14 +182,12 @@ function VideoCard({
   busy,
   onPosted,
   onSkip,
-  onCopy,
 }: {
   video: QueueVideo;
   playbackUrl: string;
   busy: boolean;
   onPosted: () => void;
   onSkip: () => void;
-  onCopy: (text: string, label: string) => void;
 }) {
   const time = video.scheduled_at ? slotLabelForDate(video.scheduled_at) : "--:--";
   const statusBadge = {
