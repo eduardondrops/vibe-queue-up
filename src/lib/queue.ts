@@ -80,6 +80,10 @@ export async function appendToQueue(payload: {
   });
 
   if (error) throw error;
+
+  // Recompute everyone so today's remaining slots fill first and
+  // no schedule lands in the past.
+  await recomputeQueue();
 }
 
 /** Mark as posted (does NOT shift the queue). */
