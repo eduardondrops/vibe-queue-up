@@ -174,22 +174,43 @@ function Calendar() {
           const isToday = k === todayKey;
           const isPast = k < todayKey;
           const hasItems = summary && summary.total > 0;
-          const clickable = hasItems && inMonth && !isPast;
+          const clickable = inMonth && !isPast && (hasItems || isToday);
+
+          const baseClasses =
+            "relative flex aspect-square flex-col items-center justify-start rounded-xl border p-1.5 text-xs transition-all";
+
+          let stateClasses = "";
+          if (!inMonth) {
+            stateClasses = "border-transparent bg-transparent text-muted-foreground/40";
+          } else if (isToday) {
+            // HOJE — verde Instagram close friends
+            stateClasses =
+              "border-success/60 bg-success text-success-foreground ring-2 ring-success/70 ring-offset-2 ring-offset-background shadow-[0_8px_24px_-8px_oklch(0.72_0.18_155/0.6)]";
+          } else if (isPast) {
+            stateClasses =
+              "border-border/40 bg-muted/40 text-muted-foreground opacity-50 cursor-not-allowed";
+          } else {
+            // Futuro
+            stateClasses = "border-border bg-surface text-foreground";
+          }
+
+          const hoverClasses = clickable
+            ? "hover:border-primary/60 hover:shadow-[var(--shadow-glow)] hover:-translate-y-0.5"
+            : "";
 
           const cell = (
             <div
-              className={[
-                "relative flex aspect-square flex-col items-center justify-start rounded-xl border p-1.5 text-xs transition-all",
-                inMonth ? "border-border bg-surface" : "border-transparent bg-transparent text-muted-foreground/40",
-                isPast && inMonth ? "border-border/40 bg-muted/40 text-muted-foreground opacity-50 cursor-not-allowed" : "",
-                clickable ? "hover:border-primary/60 hover:shadow-[var(--shadow-glow)]" : "",
-                isToday ? "ring-1 ring-primary" : "",
-              ].join(" ")}
+              className={[baseClasses, stateClasses, hoverClasses].join(" ")}
               aria-disabled={isPast && inMonth ? true : undefined}
             >
+              {isToday && (
+                <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 rounded-full bg-success px-1.5 py-px text-[8px] font-bold uppercase tracking-widest text-success-foreground shadow-sm">
+                  Hoje
+                </span>
+              )}
               <span
                 className={`font-display text-sm ${
-                  isToday ? "grad-text font-bold" : ""
+                  isToday ? "font-bold text-success-foreground" : ""
                 } ${isPast && inMonth ? "text-muted-foreground" : ""}`}
               >
                 {d.getDate()}
@@ -199,18 +220,26 @@ function Calendar() {
                   <div className="flex items-center gap-1">
                     <span
                       className={`inline-block h-1.5 w-1.5 rounded-full ${
-                        isPast && inMonth ? "bg-muted-foreground" : "grad-bg"
+                        isToday
+                          ? "bg-success-foreground"
+                          : isPast && inMonth
+                            ? "bg-muted-foreground"
+                            : "grad-bg"
                       }`}
                     />
                     <span
                       className={`text-[10px] font-semibold ${
-                        isPast && inMonth ? "text-muted-foreground" : "text-foreground"
+                        isToday
+                          ? "text-success-foreground"
+                          : isPast && inMonth
+                            ? "text-muted-foreground"
+                            : "text-foreground"
                       }`}
                     >
                       {summary.total}
                     </span>
                   </div>
-                  {summary.pending > 0 && !isPast && (
+                  {summary.pending > 0 && !isPast && !isToday && (
                     <span className="text-[9px] text-muted-foreground">
                       {summary.pending} pend.
                     </span>
