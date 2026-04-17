@@ -58,10 +58,12 @@ export type Database = {
       }
       videos: {
         Row: {
+          base_text: string
           caption: string
           created_at: string
           hashtags: string
           id: string
+          posted_at: string | null
           queue_position: number | null
           scheduled_at: string | null
           status: Database["public"]["Enums"]["video_status"]
@@ -69,12 +71,15 @@ export type Database = {
           updated_at: string
           uploaded_by: string | null
           video_url: string
+          workspace_id: string
         }
         Insert: {
+          base_text?: string
           caption?: string
           created_at?: string
           hashtags?: string
           id?: string
+          posted_at?: string | null
           queue_position?: number | null
           scheduled_at?: string | null
           status?: Database["public"]["Enums"]["video_status"]
@@ -82,12 +87,15 @@ export type Database = {
           updated_at?: string
           uploaded_by?: string | null
           video_url: string
+          workspace_id: string
         }
         Update: {
+          base_text?: string
           caption?: string
           created_at?: string
           hashtags?: string
           id?: string
+          posted_at?: string | null
           queue_position?: number | null
           scheduled_at?: string | null
           status?: Database["public"]["Enums"]["video_status"]
@@ -95,6 +103,86 @@ export type Database = {
           updated_at?: string
           uploaded_by?: string | null
           video_url?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "videos_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_members: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["workspace_role"]
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["workspace_role"]
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["workspace_role"]
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_members_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspaces: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          created_by: string
+          facebook_url: string | null
+          id: string
+          instagram_url: string | null
+          name: string
+          tiktok_url: string | null
+          updated_at: string
+          youtube_url: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          created_by: string
+          facebook_url?: string | null
+          id?: string
+          instagram_url?: string | null
+          name: string
+          tiktok_url?: string | null
+          updated_at?: string
+          youtube_url?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          created_by?: string
+          facebook_url?: string | null
+          id?: string
+          instagram_url?: string | null
+          name?: string
+          tiktok_url?: string | null
+          updated_at?: string
+          youtube_url?: string | null
         }
         Relationships: []
       }
@@ -110,10 +198,23 @@ export type Database = {
         }
         Returns: boolean
       }
+      has_workspace_role: {
+        Args: {
+          _roles: Database["public"]["Enums"]["workspace_role"][]
+          _user_id: string
+          _workspace_id: string
+        }
+        Returns: boolean
+      }
+      is_workspace_member: {
+        Args: { _user_id: string; _workspace_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "client"
       video_status: "pending" | "posted" | "skipped"
+      workspace_role: "owner" | "editor" | "viewer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -243,6 +344,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "client"],
       video_status: ["pending", "posted", "skipped"],
+      workspace_role: ["owner", "editor", "viewer"],
     },
   },
 } as const
