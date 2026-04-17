@@ -172,33 +172,45 @@ function Calendar() {
           const summary = byDay[k];
           const inMonth = d.getMonth() === cursor.getMonth();
           const isToday = k === todayKey;
+          const isPast = k < todayKey;
           const hasItems = summary && summary.total > 0;
+          const clickable = hasItems && inMonth && !isPast;
 
           const cell = (
             <div
               className={[
                 "relative flex aspect-square flex-col items-center justify-start rounded-xl border p-1.5 text-xs transition-all",
                 inMonth ? "border-border bg-surface" : "border-transparent bg-transparent text-muted-foreground/40",
-                hasItems ? "hover:border-primary/60 hover:shadow-[var(--shadow-glow)]" : "",
+                isPast && inMonth ? "border-border/40 bg-muted/40 text-muted-foreground opacity-50 cursor-not-allowed" : "",
+                clickable ? "hover:border-primary/60 hover:shadow-[var(--shadow-glow)]" : "",
                 isToday ? "ring-1 ring-primary" : "",
               ].join(" ")}
+              aria-disabled={isPast && inMonth ? true : undefined}
             >
               <span
                 className={`font-display text-sm ${
                   isToday ? "grad-text font-bold" : ""
-                }`}
+                } ${isPast && inMonth ? "text-muted-foreground" : ""}`}
               >
                 {d.getDate()}
               </span>
               {hasItems && (
                 <div className="mt-auto flex w-full flex-col items-center gap-0.5">
                   <div className="flex items-center gap-1">
-                    <span className="grad-bg inline-block h-1.5 w-1.5 rounded-full" />
-                    <span className="text-[10px] font-semibold text-foreground">
+                    <span
+                      className={`inline-block h-1.5 w-1.5 rounded-full ${
+                        isPast && inMonth ? "bg-muted-foreground" : "grad-bg"
+                      }`}
+                    />
+                    <span
+                      className={`text-[10px] font-semibold ${
+                        isPast && inMonth ? "text-muted-foreground" : "text-foreground"
+                      }`}
+                    >
                       {summary.total}
                     </span>
                   </div>
-                  {summary.pending > 0 && (
+                  {summary.pending > 0 && !isPast && (
                     <span className="text-[9px] text-muted-foreground">
                       {summary.pending} pend.
                     </span>
@@ -208,7 +220,7 @@ function Calendar() {
             </div>
           );
 
-          return hasItems && inMonth ? (
+          return clickable ? (
             <Link key={k} to="/day/$date" params={{ date: k }}>
               {cell}
             </Link>
