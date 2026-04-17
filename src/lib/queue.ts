@@ -3,28 +3,28 @@ import { scheduledDateFor } from "./scheduling";
 
 export type QueueVideo = {
   id: string;
+  workspace_id: string;
   video_url: string;
   storage_path: string;
   caption: string;
+  base_text: string;
   hashtags: string;
   status: "pending" | "posted" | "skipped";
   queue_position: number | null;
   scheduled_at: string | null;
+  posted_at: string | null;
+  uploaded_by: string | null;
   created_at: string;
 };
 
 /**
- * Recompute queue_position and scheduled_at for ALL pending videos.
- * Pending videos are ordered by their current queue_position (nulls last),
- * then created_at as a tie-breaker.
- *
- * Posted/skipped videos are NOT touched (they keep their original schedule
- * for history; "skipped" is appended to the end of pending — see skipVideo).
+ * Recompute queue_position and scheduled_at for all pending videos in a workspace.
  */
-export async function recomputeQueue(): Promise<void> {
+export async function recomputeQueue(workspaceId: string): Promise<void> {
   const { data, error } = await supabase
     .from("videos")
     .select("id, queue_position, created_at")
+    .eq("workspace_id", workspaceId)
     .eq("status", "pending")
     .order("queue_position", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true });
@@ -38,7 +38,6 @@ export async function recomputeQueue(): Promise<void> {
     scheduled_at: scheduledDateFor(idx).toISOString(),
   }));
 
-  // Run updates in parallel — small lists.
   await Promise.all(
     updates.map((u) =>
       supabase
@@ -52,16 +51,22 @@ export async function recomputeQueue(): Promise<void> {
   );
 }
 
-/** Add a fresh upload to the END of the pending queue. */
+/** Append a fresh upload to the END of the workspace's pending queue. */
 export async function appendToQueue(payload: {
-  videoUrl: string;
+  workspaceId: string;
   storagePath: string;
-  caption: string;
+  baseText: string;
   hashtags: string;
 }): Promise<void> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
   const { data: maxRow } = await supabase
     .from("videos")
     .select("queue_position")
+    .eq("workspace_id", payload.workspaceId)
     .eq("status", "pending")
     .order("queue_position", { ascending: false, nullsFirst: false })
     .limit(1)
@@ -70,50 +75,74 @@ export async function appendToQueue(payload: {
   const nextPos = (maxRow?.queue_position ?? -1) + 1;
 
   const { error } = await supabase.from("videos").insert({
-    video_url: payload.videoUrl,
+    workspace_id: payload.workspaceId,
+    video_url: payload.storagePath,
     storage_path: payload.storagePath,
-    caption: payload.caption,
+    base_text: payload.baseText,
+    caption: payload.baseText,
     hashtags: payload.hashtags,
     status: "pending",
     queue_position: nextPos,
     scheduled_at: scheduledDateFor(nextPos).toISOString(),
+    uploaded_by: user.id,
   });
 
   if (error) throw error;
 
-  // Recompute everyone so today's remaining slots fill first and
-  // no schedule lands in the past.
-  await recomputeQueue();
+  await recomputeQueue(payload.workspaceId);
 }
 
-/** Mark as posted (does NOT shift the queue). */
+/** Mark as posted and stamp posted_at (used by auto-delete). */
 export async function markPosted(id: string): Promise<void> {
   const { error } = await supabase
     .from("videos")
-    .update({ status: "posted" })
+    .update({ status: "posted", posted_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw error;
 }
 
-/**
- * Skip: remove from current position, send to END of pending queue,
- * recompute everyone's position + scheduled_at.
- */
-export async function skipVideo(id: string): Promise<void> {
+/** Skip: send to end of pending queue, recompute. */
+export async function skipVideo(id: string, workspaceId: string): Promise<void> {
   const { data: maxRow } = await supabase
     .from("videos")
     .select("queue_position")
+    .eq("workspace_id", workspaceId)
     .eq("status", "pending")
     .order("queue_position", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
 
-  const tailPos = (maxRow?.queue_position ?? 0) + 1000; // temp huge value
+  const tailPos = (maxRow?.queue_position ?? 0) + 1000;
   const { error } = await supabase
     .from("videos")
     .update({ queue_position: tailPos })
     .eq("id", id);
   if (error) throw error;
 
-  await recomputeQueue();
+  await recomputeQueue(workspaceId);
+}
+
+/**
+ * Auto-delete posted videos older than 48h within a workspace.
+ * Removes both DB rows and storage objects.
+ */
+export async function autoDeleteOldPosted(workspaceId: string): Promise<number> {
+  const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+  const { data: stale } = await supabase
+    .from("videos")
+    .select("id, storage_path")
+    .eq("workspace_id", workspaceId)
+    .eq("status", "posted")
+    .not("posted_at", "is", null)
+    .lt("posted_at", cutoff);
+
+  if (!stale || stale.length === 0) return 0;
+
+  const paths = stale.map((s) => s.storage_path).filter(Boolean);
+  if (paths.length > 0) {
+    await supabase.storage.from("videos").remove(paths);
+  }
+  const ids = stale.map((s) => s.id);
+  await supabase.from("videos").delete().in("id", ids);
+  return ids.length;
 }
