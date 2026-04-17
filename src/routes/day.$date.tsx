@@ -171,6 +171,7 @@ function DayList({ dateKey: dKey }: { dateKey: string }) {
             <VideoCard
               key={v.id}
               video={v}
+              playbackUrl={signedUrls[v.id] ?? ""}
               busy={busyId === v.id}
               onPosted={() => handlePosted(v.id)}
               onSkip={() => handleSkip(v.id)}
@@ -185,12 +186,14 @@ function DayList({ dateKey: dKey }: { dateKey: string }) {
 
 function VideoCard({
   video,
+  playbackUrl,
   busy,
   onPosted,
   onSkip,
   onCopy,
 }: {
   video: QueueVideo;
+  playbackUrl: string;
   busy: boolean;
   onPosted: () => void;
   onSkip: () => void;
