@@ -6,9 +6,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { dayKey, slotLabelForDate } from "@/lib/scheduling";
 import { markPosted, skipVideo, type QueueVideo } from "@/lib/queue";
 import { Button } from "@/components/ui/button";
+import { PlatformCaptions } from "@/components/PlatformCaptions";
 import {
   ChevronLeft,
-  Copy,
   Download,
   Check,
   SkipForward,
@@ -133,14 +133,7 @@ function DayList({ dateKey: dKey }: { dateKey: string }) {
     }
   }
 
-  async function copy(text: string, label: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success(`${label} copiada`);
-    } catch {
-      toast.error("Não foi possível copiar");
-    }
-  }
+  // Copy is now handled per-platform inside PlatformCaptions.
 
   return (
     <div>
@@ -175,7 +168,6 @@ function DayList({ dateKey: dKey }: { dateKey: string }) {
               busy={busyId === v.id}
               onPosted={() => handlePosted(v.id)}
               onSkip={() => handleSkip(v.id)}
-              onCopy={copy}
             />
           ))}
         </div>
@@ -190,14 +182,12 @@ function VideoCard({
   busy,
   onPosted,
   onSkip,
-  onCopy,
 }: {
   video: QueueVideo;
   playbackUrl: string;
   busy: boolean;
   onPosted: () => void;
   onSkip: () => void;
-  onCopy: (text: string, label: string) => void;
 }) {
   const time = video.scheduled_at ? slotLabelForDate(video.scheduled_at) : "--:--";
   const statusBadge = {
@@ -234,24 +224,12 @@ function VideoCard({
         className="aspect-[9/16] w-full bg-black"
       />
 
-      <div className="space-y-3 p-4">
-        {video.caption && (
-          <button
-            onClick={() => onCopy(video.caption, "Legenda")}
-            className="group flex w-full items-start gap-2 rounded-lg bg-surface p-3 text-left text-sm hover:bg-surface-elevated"
-          >
-            <Copy className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary" />
-            <span className="line-clamp-3">{video.caption}</span>
-          </button>
-        )}
-        {video.hashtags && (
-          <button
-            onClick={() => onCopy(video.hashtags, "Hashtags")}
-            className="group flex w-full items-start gap-2 rounded-lg bg-surface p-3 text-left text-sm hover:bg-surface-elevated"
-          >
-            <Copy className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary" />
-            <span className="line-clamp-2 text-primary">{video.hashtags}</span>
-          </button>
+      <div className="space-y-4 p-4">
+        {(video.caption || video.hashtags) && (
+          <PlatformCaptions
+            baseText={video.caption}
+            hashtags={video.hashtags}
+          />
         )}
 
         {video.status === "pending" && (
