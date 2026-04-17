@@ -218,7 +218,7 @@ function VideoCard({
           </span>
         </div>
         <a
-          href={video.video_url}
+          href={playbackUrl}
           download
           className="flex items-center gap-1 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground"
         >
@@ -227,7 +227,7 @@ function VideoCard({
       </div>
 
       <video
-        src={video.video_url}
+        src={playbackUrl}
         controls
         playsInline
         preload="metadata"
