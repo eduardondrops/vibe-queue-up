@@ -174,7 +174,7 @@ function Calendar() {
           const isToday = k === todayKey;
           const isPast = k < todayKey;
           const hasItems = summary && summary.total > 0;
-          const clickable = hasItems && inMonth && !isPast;
+          const clickable = inMonth && !isPast && (hasItems || isToday);
 
           const baseClasses =
             "relative flex aspect-square flex-col items-center justify-start rounded-xl border p-1.5 text-xs transition-all";
