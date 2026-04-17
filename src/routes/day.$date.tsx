@@ -224,24 +224,12 @@ function VideoCard({
         className="aspect-[9/16] w-full bg-black"
       />
 
-      <div className="space-y-3 p-4">
-        {video.caption && (
-          <button
-            onClick={() => onCopy(video.caption, "Legenda")}
-            className="group flex w-full items-start gap-2 rounded-lg bg-surface p-3 text-left text-sm hover:bg-surface-elevated"
-          >
-            <Copy className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary" />
-            <span className="line-clamp-3">{video.caption}</span>
-          </button>
-        )}
-        {video.hashtags && (
-          <button
-            onClick={() => onCopy(video.hashtags, "Hashtags")}
-            className="group flex w-full items-start gap-2 rounded-lg bg-surface p-3 text-left text-sm hover:bg-surface-elevated"
-          >
-            <Copy className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary" />
-            <span className="line-clamp-2 text-primary">{video.hashtags}</span>
-          </button>
+      <div className="space-y-4 p-4">
+        {(video.caption || video.hashtags) && (
+          <PlatformCaptions
+            baseText={video.caption}
+            hashtags={video.hashtags}
+          />
         )}
 
         {video.status === "pending" && (
