@@ -6,9 +6,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { dayKey, slotLabelForDate } from "@/lib/scheduling";
 import { markPosted, skipVideo, type QueueVideo } from "@/lib/queue";
 import { Button } from "@/components/ui/button";
+import { PlatformCaptions } from "@/components/PlatformCaptions";
 import {
   ChevronLeft,
-  Copy,
   Download,
   Check,
   SkipForward,
