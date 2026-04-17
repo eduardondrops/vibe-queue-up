@@ -52,6 +52,7 @@ function DayPage() {
 
 function DayList({ dateKey: dKey }: { dateKey: string }) {
   const [videos, setVideos] = useState<QueueVideo[]>([]);
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -72,9 +73,24 @@ function DayList({ dateKey: dKey }: { dateKey: string }) {
 
     if (error) {
       toast.error("Erro ao carregar vídeos");
-    } else {
-      setVideos((data ?? []) as QueueVideo[]);
+      setLoading(false);
+      return;
     }
+
+    const list = (data ?? []) as QueueVideo[];
+    setVideos(list);
+
+    // Generate short-lived signed URLs (1h TTL) for the private bucket.
+    const urls: Record<string, string> = {};
+    await Promise.all(
+      list.map(async (v) => {
+        const { data: signed } = await supabase.storage
+          .from("videos")
+          .createSignedUrl(v.storage_path, 3600);
+        if (signed?.signedUrl) urls[v.id] = signed.signedUrl;
+      }),
+    );
+    setSignedUrls(urls);
     setLoading(false);
   }, [dKey]);
 
@@ -155,6 +171,7 @@ function DayList({ dateKey: dKey }: { dateKey: string }) {
             <VideoCard
               key={v.id}
               video={v}
+              playbackUrl={signedUrls[v.id] ?? ""}
               busy={busyId === v.id}
               onPosted={() => handlePosted(v.id)}
               onSkip={() => handleSkip(v.id)}
@@ -169,12 +186,14 @@ function DayList({ dateKey: dKey }: { dateKey: string }) {
 
 function VideoCard({
   video,
+  playbackUrl,
   busy,
   onPosted,
   onSkip,
   onCopy,
 }: {
   video: QueueVideo;
+  playbackUrl: string;
   busy: boolean;
   onPosted: () => void;
   onSkip: () => void;
@@ -199,7 +218,7 @@ function VideoCard({
           </span>
         </div>
         <a
-          href={video.video_url}
+          href={playbackUrl}
           download
           className="flex items-center gap-1 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground"
         >
@@ -208,7 +227,7 @@ function VideoCard({
       </div>
 
       <video
-        src={video.video_url}
+        src={playbackUrl}
         controls
         playsInline
         preload="metadata"
