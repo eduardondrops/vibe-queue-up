@@ -78,11 +78,11 @@ function UploadForm() {
         });
       if (upErr) throw upErr;
 
-      const { data: pub } = supabase.storage.from("videos").getPublicUrl(path);
-
       setProgressLabel("Adicionando à fila...");
+      // Note: video_url is kept for backwards compatibility but is no longer
+      // a public URL. Signed URLs are generated on demand when displaying videos.
       await appendToQueue({
-        videoUrl: pub.publicUrl,
+        videoUrl: path,
         storagePath: path,
         caption: caption.trim(),
         hashtags: hashtags.trim(),
