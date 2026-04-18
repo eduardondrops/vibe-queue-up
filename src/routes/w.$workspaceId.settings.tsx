@@ -14,7 +14,7 @@ import {
   type Workspace,
 } from "@/lib/workspaces";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, ImagePlus, UserPlus, Trash2 } from "lucide-react";
+import { Loader2, ImagePlus, UserPlus, Trash2, Search } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/w/$workspaceId/settings")({
@@ -272,9 +272,44 @@ function MembersSection({
   const [members, setMembers] = useState<Member[]>([]);
   const [emails, setEmails] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [newUserId, setNewUserId] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
   const [newRole, setNewRole] = useState<"editor" | "viewer">("editor");
   const [adding, setAdding] = useState(false);
+  const [lookup, setLookup] = useState<
+    | { state: "idle" }
+    | { state: "searching" }
+    | { state: "found"; userId: string; email: string; displayName: string | null }
+    | { state: "not_found" }
+    | { state: "error"; message: string }
+  >({ state: "idle" });
+
+  async function handleSearch() {
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      setLookup({ state: "error", message: "Email inválido" });
+      return;
+    }
+    setLookup({ state: "searching" });
+    const { data, error } = await supabase.rpc("find_user_by_email_for_workspace", {
+      _workspace_id: workspaceId,
+      _email: email,
+    });
+    if (error) {
+      setLookup({ state: "error", message: error.message });
+      return;
+    }
+    const row = (data ?? [])[0];
+    if (!row) {
+      setLookup({ state: "not_found" });
+      return;
+    }
+    setLookup({
+      state: "found",
+      userId: row.id,
+      email: row.email ?? email,
+      displayName: row.display_name,
+    });
+  }
 
   async function load() {
     setLoading(true);
@@ -308,17 +343,18 @@ function MembersSection({
 
   async function handleAdd(e: FormEvent) {
     e.preventDefault();
-    if (!newUserId.trim()) return;
+    if (lookup.state !== "found") return;
     setAdding(true);
     try {
       const { error } = await supabase.from("workspace_members").insert({
         workspace_id: workspaceId,
-        user_id: newUserId.trim(),
+        user_id: lookup.userId,
         role: newRole,
       });
       if (error) throw error;
-      toast.success("Membro adicionado");
-      setNewUserId("");
+      toast.success(`${lookup.email} adicionado(a)`);
+      setInviteEmail("");
+      setLookup({ state: "idle" });
       load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao adicionar");
@@ -382,17 +418,55 @@ function MembersSection({
       >
         <p className="text-sm font-semibold">Adicionar membro</p>
         <div className="space-y-2">
-          <Label htmlFor="member-id">User ID</Label>
-          <Input
-            id="member-id"
-            value={newUserId}
-            onChange={(e) => setNewUserId(e.target.value)}
-            placeholder="UUID do usuário"
-          />
+          <Label htmlFor="member-email">Email do usuário</Label>
+          <div className="flex gap-2">
+            <Input
+              id="member-email"
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => {
+                setInviteEmail(e.target.value);
+                if (lookup.state !== "idle") setLookup({ state: "idle" });
+              }}
+              placeholder="pessoa@exemplo.com"
+              autoComplete="off"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleSearch}
+              disabled={lookup.state === "searching" || !inviteEmail.trim()}
+            >
+              {lookup.state === "searching" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Search className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
           <p className="text-[11px] text-muted-foreground">
-            Peça o User ID para a pessoa (visível no perfil dela após login).
+            A pessoa precisa já ter conta no PostFlow.
           </p>
         </div>
+
+        {lookup.state === "found" && (
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm">
+            <p className="font-medium">{lookup.displayName ?? lookup.email}</p>
+            <p className="text-xs text-muted-foreground">{lookup.email}</p>
+          </div>
+        )}
+        {lookup.state === "not_found" && (
+          <p className="rounded-xl border border-border bg-surface px-3 py-2 text-xs text-muted-foreground">
+            Nenhum usuário encontrado com este email. Peça para a pessoa criar uma
+            conta primeiro.
+          </p>
+        )}
+        {lookup.state === "error" && (
+          <p className="rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+            {lookup.message}
+          </p>
+        )}
+
         <div className="space-y-2">
           <Label htmlFor="member-role">Papel</Label>
           <select
@@ -407,7 +481,7 @@ function MembersSection({
         </div>
         <Button
           type="submit"
-          disabled={adding}
+          disabled={adding || lookup.state !== "found"}
           className="w-full grad-bg text-primary-foreground hover:opacity-90"
         >
           <UserPlus className="mr-2 h-4 w-4" />
