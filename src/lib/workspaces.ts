@@ -34,6 +34,21 @@ export async function getWorkspace(id: string): Promise<Workspace | null> {
   return (data ?? null) as Workspace | null;
 }
 
+function normalizeUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  // Add protocol if missing so it's a valid URL.
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    // Validate it parses as a URL; ignore the result.
+    new URL(withProtocol);
+    return withProtocol;
+  } catch {
+    throw new Error(`URL inválida: ${trimmed}`);
+  }
+}
+
 export async function createWorkspace(input: {
   name: string;
   avatar_url?: string | null;
@@ -47,20 +62,28 @@ export async function createWorkspace(input: {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Não autenticado");
 
+  const name = input.name?.trim();
+  if (!name) throw new Error("Nome do perfil é obrigatório");
+
+  const payload = {
+    name,
+    avatar_url: input.avatar_url ?? null,
+    instagram_url: normalizeUrl(input.instagram_url),
+    tiktok_url: normalizeUrl(input.tiktok_url),
+    youtube_url: normalizeUrl(input.youtube_url),
+    facebook_url: normalizeUrl(input.facebook_url),
+    created_by: user.id,
+  };
+
   const { data, error } = await supabase
     .from("workspaces")
-    .insert({
-      name: input.name,
-      avatar_url: input.avatar_url ?? null,
-      instagram_url: input.instagram_url ?? null,
-      tiktok_url: input.tiktok_url ?? null,
-      youtube_url: input.youtube_url ?? null,
-      facebook_url: input.facebook_url ?? null,
-      created_by: user.id,
-    })
+    .insert(payload)
     .select("*")
     .single();
-  if (error) throw error;
+  if (error) {
+    console.error("createWorkspace failed", { payload, error });
+    throw new Error(error.message || "Erro ao criar workspace");
+  }
   return data as Workspace;
 }
 
