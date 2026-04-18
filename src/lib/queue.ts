@@ -105,7 +105,7 @@ export async function recomputeQueue(workspaceId: string): Promise<void> {
 
   // Persist only changed rows.
   const byId = new Map(rows.map((r) => [r.id, r]));
-  const updates: Array<Promise<unknown>> = [];
+  const updates: Array<PromiseLike<unknown>> = [];
   for (const [id, val] of assignments) {
     const prev = byId.get(id);
     if (!prev) continue;
