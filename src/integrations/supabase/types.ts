@@ -191,6 +191,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      find_user_by_email_for_workspace: {
+        Args: { _email: string; _workspace_id: string }
+        Returns: {
+          display_name: string
+          email: string
+          id: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
