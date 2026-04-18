@@ -279,7 +279,17 @@ function CreateWorkspaceModal({
     try {
       let avatarPath: string | null = null;
       if (avatar) {
-        avatarPath = await uploadWorkspaceAvatar(avatar);
+        try {
+          avatarPath = await uploadWorkspaceAvatar(avatar);
+        } catch (err) {
+          // Don't block creation if avatar fails — warn and continue.
+          console.error("avatar upload failed, continuing without it", err);
+          toast.warning(
+            err instanceof Error
+              ? `Avatar não enviado: ${err.message}`
+              : "Avatar não enviado",
+          );
+        }
       }
       await createWorkspace({
         name: name.trim(),
@@ -292,7 +302,8 @@ function CreateWorkspaceModal({
       toast.success("Perfil criado");
       onCreated();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao criar");
+      console.error("createWorkspace error", e);
+      toast.error(e instanceof Error ? e.message : "Erro ao criar perfil");
     } finally {
       setSubmitting(false);
     }
