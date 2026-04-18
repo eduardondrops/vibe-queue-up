@@ -31,7 +31,7 @@ function nowInSaoPaulo(): { year: number; month: number; day: number; hour: numb
     year: get("year"),
     month: get("month"),
     day: get("day"),
-    hour: get("hour") % 24, // some runtimes report 24 for midnight
+    hour: get("hour") % 24,
     minute: get("minute"),
   };
 }
@@ -67,11 +67,29 @@ function spOffsetMinutes(utcDate: Date): number {
 /**
  * Build a Date (UTC instant) representing the given São Paulo wall-clock time.
  */
-function spWallToUtc(year: number, month: number, day: number, hour: number, minute: number): Date {
-  // First approximation, then correct using the actual offset at that instant.
+export function spWallToUtc(year: number, month: number, day: number, hour: number, minute: number): Date {
   const approx = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
   const offset = spOffsetMinutes(approx);
   return new Date(approx.getTime() + offset * 60000);
+}
+
+/** Add N days to a SP date (year/month/day). Handles month/year rollover. */
+function spAddDays(year: number, month: number, day: number, days: number): { year: number; month: number; day: number } {
+  // Use UTC noon to avoid DST edge cases when adding days, then read back as SP wall.
+  const anchor = spWallToUtc(year, month, day, 12, 0);
+  const future = new Date(anchor.getTime() + days * 24 * 60 * 60 * 1000);
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = fmt.formatToParts(future);
+  return {
+    year: Number(parts.find((p) => p.type === "year")?.value),
+    month: Number(parts.find((p) => p.type === "month")?.value),
+    day: Number(parts.find((p) => p.type === "day")?.value),
+  };
 }
 
 /**
@@ -90,48 +108,45 @@ export function getAvailableSlotsToday(): Date[] {
 }
 
 /**
- * Compute the scheduled Date (UTC instant) for the Nth pending video (0-indexed).
- *
- * Rules:
- * - Fill remaining slots of TODAY (São Paulo) first.
- * - Then continue 3 per day at fixed slots on the following days.
- * - Never returns a date in the past.
+ * Returns the slots (UTC Date instants) for a future SP date (yyyy-mm-dd).
+ * If the date is today, returns only future slots.
+ * If the date is in the past, returns [].
  */
-export function scheduledDateFor(index: number): Date {
-  const today = getAvailableSlotsToday();
-
-  if (index < today.length) {
-    return today[index];
-  }
-
-  // Slots after today: continue from tomorrow (SP local), 3 per day.
-  const remaining = index - today.length;
-  const dayOffset = Math.floor(remaining / VIDEOS_PER_DAY) + 1; // +1 → tomorrow onward
-  const slot = SLOTS[remaining % VIDEOS_PER_DAY];
-
+export function getSlotsForDateKey(dateKey: string): Date[] {
+  const [y, m, d] = dateKey.split("-").map(Number);
   const now = nowInSaoPaulo();
-  // Build SP wall-clock for now.day + dayOffset by leveraging UTC Date arithmetic.
-  // We construct a date at noon SP today, then add dayOffset days, then read its SP wall date.
-  const anchor = spWallToUtc(now.year, now.month, now.day, 12, 0);
-  const future = new Date(anchor.getTime() + dayOffset * 24 * 60 * 60 * 1000);
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const parts = fmt.formatToParts(future);
-  const y = Number(parts.find((p) => p.type === "year")?.value);
-  const mo = Number(parts.find((p) => p.type === "month")?.value);
-  const d = Number(parts.find((p) => p.type === "day")?.value);
-  return spWallToUtc(y, mo, d, slot.h, slot.m);
+  const todayKey = `${String(now.year).padStart(4, "0")}-${String(now.month).padStart(2, "0")}-${String(now.day).padStart(2, "0")}`;
+  if (dateKey < todayKey) return [];
+  if (dateKey === todayKey) return getAvailableSlotsToday();
+  return SLOTS.map((s) => spWallToUtc(y, m, d, s.h, s.m));
 }
 
 /**
- * Schedule a list of queue items (already ordered) and return their UTC dates.
+ * Generate an infinite-ish list of upcoming slot timestamps starting from now (SP).
+ * `maxDays` bounds the horizon (default ~120 days = 360 slots).
  */
-export function scheduleVideos<T>(queue: T[]): Array<{ item: T; scheduledAt: Date }> {
-  return queue.map((item, idx) => ({ item, scheduledAt: scheduledDateFor(idx) }));
+export function generateUpcomingSlots(maxDays = 120): Date[] {
+  const out: Date[] = [];
+  const now = nowInSaoPaulo();
+  // Day 0 (today) — only future slots
+  out.push(...getAvailableSlotsToday());
+  // Day 1..maxDays — all 3 slots
+  for (let i = 1; i <= maxDays; i++) {
+    const next = spAddDays(now.year, now.month, now.day, i);
+    for (const s of SLOTS) {
+      out.push(spWallToUtc(next.year, next.month, next.day, s.h, s.m));
+    }
+  }
+  return out;
+}
+
+/**
+ * Compute the scheduled Date (UTC instant) for the Nth pending video (0-indexed)
+ * if there were no pinned videos. Used for backwards compat / initial enqueue.
+ */
+export function scheduledDateFor(index: number): Date {
+  const slots = generateUpcomingSlots();
+  return slots[Math.min(index, slots.length - 1)];
 }
 
 /** Returns the time-slot label (e.g. "18:30") for a date, in São Paulo time. */
@@ -154,4 +169,15 @@ export function dayKey(d: Date | string): string {
     month: "2-digit",
     day: "2-digit",
   }).format(date);
+}
+
+/** Today's day key in SP. */
+export function todayKey(): string {
+  return dayKey(new Date());
+}
+
+/** Composite key for a specific slot instant (used as Set key). */
+export function slotKey(d: Date | string): string {
+  const date = typeof d === "string" ? new Date(d) : d;
+  return `${dayKey(date)}T${slotLabelForDate(date)}`;
 }
