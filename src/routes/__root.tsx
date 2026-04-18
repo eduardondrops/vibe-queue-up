@@ -30,7 +30,16 @@ export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      {
+        name: "viewport",
+        content:
+          "width=device-width, initial-scale=1, viewport-fit=cover",
+      },
+      { name: "theme-color", content: "#0d0014" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-title", content: "PostFlow" },
+      { name: "mobile-web-app-capable", content: "yes" },
       { title: "ReelQueue — Agendamento inteligente de Reels" },
       {
         name: "description",
@@ -53,6 +62,9 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: "stylesheet", href: appCss },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "icon", href: "/icon-512.png", type: "image/png" },
+      { rel: "apple-touch-icon", href: "/icon-512.png" },
       {
         rel: "preconnect",
         href: "https://fonts.googleapis.com",
