@@ -110,12 +110,21 @@ export async function getMyRole(workspaceId: string): Promise<WorkspaceRole | nu
 }
 
 export async function uploadWorkspaceAvatar(file: File): Promise<string> {
-  const ext = file.name.split(".").pop() || "png";
-  const path = `${crypto.randomUUID()}.${ext}`;
+  if (!file.type.startsWith("image/")) {
+    throw new Error("O avatar deve ser uma imagem");
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error("Imagem muito grande (máx 5MB)");
+  }
+  const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `${crypto.randomUUID()}.${ext || "png"}`;
   const { error } = await supabase.storage
     .from("workspace-avatars")
     .upload(path, file, { contentType: file.type, upsert: false });
-  if (error) throw error;
+  if (error) {
+    console.error("uploadWorkspaceAvatar failed", error);
+    throw new Error(`Falha ao enviar avatar: ${error.message}`);
+  }
   return path;
 }
 
