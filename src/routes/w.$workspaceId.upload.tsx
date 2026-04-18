@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { appendToQueue } from "@/lib/queue";
 import { getMyRole, getWorkspace, type Workspace } from "@/lib/workspaces";
-import { Upload, Film, Loader2 } from "lucide-react";
+import {
+  SLOTS,
+  dayKey,
+  slotKey,
+  spWallToUtc,
+  todayKey,
+} from "@/lib/scheduling";
+import { Upload, Film, Loader2, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/w/$workspaceId/upload")({
@@ -62,12 +69,83 @@ function UploadPage() {
   );
 }
 
+type SlotChoice = "auto" | string; // "auto" or ISO of slot
+
 function UploadForm({ workspaceId }: { workspaceId: string }) {
   const [file, setFile] = useState<File | null>(null);
   const [baseText, setBaseText] = useState("");
   const [hashtags, setHashtags] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [progressLabel, setProgressLabel] = useState("");
+
+  // Date picker (SP day key, e.g. "2026-04-19")
+  const [dayChoice, setDayChoice] = useState<string>(todayKey());
+  const [slotChoice, setSlotChoice] = useState<SlotChoice>("auto");
+  const [takenKeys, setTakenKeys] = useState<Set<string>>(new Set());
+
+  // Build day options: today + next 30 days.
+  const dayOptions = useMemo(() => {
+    const today = new Date();
+    const out: Array<{ key: string; label: string }> = [];
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      const key = dayKey(d);
+      const label = d.toLocaleDateString("pt-BR", {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+      });
+      out.push({ key, label: i === 0 ? `Hoje · ${label}` : label });
+    }
+    return out;
+  }, []);
+
+  // Reload taken slots whenever day changes.
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      const [y, m, d] = dayChoice.split("-").map(Number);
+      const start = new Date(y, m - 1, d, 0, 0, 0, 0);
+      const end = new Date(y, m - 1, d, 23, 59, 59, 999);
+      const { data } = await supabase
+        .from("videos")
+        .select("scheduled_at, status")
+        .eq("workspace_id", workspaceId)
+        .eq("status", "pending")
+        .gte("scheduled_at", start.toISOString())
+        .lte("scheduled_at", end.toISOString());
+      if (cancel) return;
+      const set = new Set<string>();
+      (data ?? []).forEach((v) => {
+        if (v.scheduled_at) set.add(slotKey(v.scheduled_at));
+      });
+      setTakenKeys(set);
+      // Reset slot if previously selected slot is now taken.
+      setSlotChoice("auto");
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [dayChoice, workspaceId]);
+
+  // Slot options for the selected day.
+  const slotOptions = useMemo(() => {
+    const [y, m, d] = dayChoice.split("-").map(Number);
+    const now = new Date();
+    return SLOTS.map((s) => {
+      const iso = spWallToUtc(y, m, d, s.h, s.m).toISOString();
+      const k = slotKey(iso);
+      const isPast = new Date(iso).getTime() <= now.getTime();
+      const isTaken = takenKeys.has(k);
+      return {
+        iso,
+        label: s.label,
+        disabled: isPast || isTaken,
+        reason: isPast ? "Horário já passou" : isTaken ? "Slot ocupado" : "",
+      };
+    });
+  }, [dayChoice, takenKeys]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -95,17 +173,22 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
       if (upErr) throw upErr;
 
       setProgressLabel("Adicionando à fila...");
+      const pinnedAt = slotChoice === "auto" ? null : slotChoice;
       await appendToQueue({
         workspaceId,
         storagePath: path,
         baseText: baseText.trim(),
         hashtags: hashtags.trim(),
+        pinnedAt,
       });
 
-      toast.success("Vídeo adicionado à fila");
+      toast.success(
+        pinnedAt ? "Vídeo agendado no slot escolhido" : "Vídeo adicionado à fila",
+      );
       setFile(null);
       setBaseText("");
       setHashtags("");
+      setSlotChoice("auto");
       const input = document.getElementById("video-file") as HTMLInputElement | null;
       if (input) input.value = "";
     } catch (err) {
@@ -126,7 +209,7 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
           Adicionar à <span className="grad-text">fila</span>
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          1 vídeo por envio. A fila distribui em 3 horários por dia.
+          Escolha o dia e o horário, ou deixe a fila decidir.
         </p>
       </div>
 
@@ -163,6 +246,61 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
             className="hidden"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label className="flex items-center gap-1.5">
+            <CalendarClock className="h-3.5 w-3.5" /> Dia
+          </Label>
+          <select
+            value={dayChoice}
+            onChange={(e) => setDayChoice(e.target.value)}
+            className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
+          >
+            {dayOptions.map((d) => (
+              <option key={d.key} value={d.key}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Horário</Label>
+          <div className="grid grid-cols-4 gap-2">
+            <button
+              type="button"
+              onClick={() => setSlotChoice("auto")}
+              className={`rounded-xl border px-2 py-2.5 text-xs font-semibold transition-all ${
+                slotChoice === "auto"
+                  ? "border-primary bg-primary/10 text-foreground"
+                  : "border-border bg-surface text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Auto
+            </button>
+            {slotOptions.map((s) => (
+              <button
+                key={s.iso}
+                type="button"
+                disabled={s.disabled}
+                onClick={() => setSlotChoice(s.iso)}
+                title={s.reason}
+                className={`rounded-xl border px-2 py-2.5 text-xs font-semibold transition-all ${
+                  s.disabled
+                    ? "cursor-not-allowed border-border/40 bg-muted/30 text-muted-foreground/50"
+                    : slotChoice === s.iso
+                      ? "border-primary bg-primary/10 text-foreground"
+                      : "border-border bg-surface text-foreground hover:border-primary/60"
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Auto = próximo slot livre. Escolher fixa o vídeo nesse horário.
+          </p>
         </div>
 
         <div className="space-y-2">
