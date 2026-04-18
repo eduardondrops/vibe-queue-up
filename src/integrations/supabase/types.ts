@@ -63,6 +63,7 @@ export type Database = {
           created_at: string
           hashtags: string
           id: string
+          pinned: boolean
           posted_at: string | null
           queue_position: number | null
           scheduled_at: string | null
@@ -79,6 +80,7 @@ export type Database = {
           created_at?: string
           hashtags?: string
           id?: string
+          pinned?: boolean
           posted_at?: string | null
           queue_position?: number | null
           scheduled_at?: string | null
@@ -95,6 +97,7 @@ export type Database = {
           created_at?: string
           hashtags?: string
           id?: string
+          pinned?: boolean
           posted_at?: string | null
           queue_position?: number | null
           scheduled_at?: string | null
