@@ -14,7 +14,7 @@ import {
   type Workspace,
 } from "@/lib/workspaces";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, ImagePlus, UserPlus, Trash2 } from "lucide-react";
+import { Loader2, ImagePlus, UserPlus, Trash2, Search } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/w/$workspaceId/settings")({
@@ -272,9 +272,44 @@ function MembersSection({
   const [members, setMembers] = useState<Member[]>([]);
   const [emails, setEmails] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [newUserId, setNewUserId] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
   const [newRole, setNewRole] = useState<"editor" | "viewer">("editor");
   const [adding, setAdding] = useState(false);
+  const [lookup, setLookup] = useState<
+    | { state: "idle" }
+    | { state: "searching" }
+    | { state: "found"; userId: string; email: string; displayName: string | null }
+    | { state: "not_found" }
+    | { state: "error"; message: string }
+  >({ state: "idle" });
+
+  async function handleSearch() {
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      setLookup({ state: "error", message: "Email inválido" });
+      return;
+    }
+    setLookup({ state: "searching" });
+    const { data, error } = await supabase.rpc("find_user_by_email_for_workspace", {
+      _workspace_id: workspaceId,
+      _email: email,
+    });
+    if (error) {
+      setLookup({ state: "error", message: error.message });
+      return;
+    }
+    const row = (data ?? [])[0];
+    if (!row) {
+      setLookup({ state: "not_found" });
+      return;
+    }
+    setLookup({
+      state: "found",
+      userId: row.id,
+      email: row.email ?? email,
+      displayName: row.display_name,
+    });
+  }
 
   async function load() {
     setLoading(true);
