@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { scheduledDateFor } from "./scheduling";
+import { generateUpcomingSlots, slotKey } from "./scheduling";
 
 export type QueueVideo = {
   id: string;
@@ -14,65 +14,152 @@ export type QueueVideo = {
   scheduled_at: string | null;
   posted_at: string | null;
   uploaded_by: string | null;
+  pinned: boolean;
+  created_at: string;
+};
+
+type PendingRow = {
+  id: string;
+  scheduled_at: string | null;
+  pinned: boolean;
   created_at: string;
 };
 
 /**
- * Recompute queue_position and scheduled_at for all pending videos in a workspace.
+ * Recompute scheduled_at and queue_position for all pending videos in a workspace,
+ * respecting pinned videos (which keep their slot).
+ *
+ * Algorithm:
+ * 1. Load all pending rows with their current scheduled_at + pinned flag.
+ * 2. Generate the upcoming slot timeline (SP, 3 per day, future only).
+ * 3. Reserve slots used by pinned videos.
+ * 4. Sort the non-pinned by their previous scheduled_at (then created_at).
+ * 5. Assign each non-pinned video to the next free upcoming slot.
+ * 6. Persist updates only for rows whose scheduled_at or queue_position changed.
  */
 export async function recomputeQueue(workspaceId: string): Promise<void> {
   const { data, error } = await supabase
     .from("videos")
-    .select("id, queue_position, created_at")
+    .select("id, scheduled_at, pinned, created_at, queue_position")
     .eq("workspace_id", workspaceId)
-    .eq("status", "pending")
-    .order("queue_position", { ascending: true, nullsFirst: false })
-    .order("created_at", { ascending: true });
+    .eq("status", "pending");
 
   if (error) throw error;
-  if (!data || data.length === 0) return;
+  const rows = (data ?? []) as Array<PendingRow & { queue_position: number | null }>;
+  if (rows.length === 0) return;
 
-  const updates = data.map((v, idx) => ({
-    id: v.id,
-    queue_position: idx,
-    scheduled_at: scheduledDateFor(idx).toISOString(),
-  }));
+  const upcoming = generateUpcomingSlots();
+  const reserved = new Set<string>();
 
-  await Promise.all(
-    updates.map((u) =>
+  // Reserve pinned slots first.
+  const pinned = rows.filter((r) => r.pinned && r.scheduled_at);
+  for (const p of pinned) {
+    if (p.scheduled_at) reserved.add(slotKey(p.scheduled_at));
+  }
+
+  // Non-pinned: keep cronological order by previous scheduled_at, then created_at.
+  const floating = rows
+    .filter((r) => !r.pinned)
+    .sort((a, b) => {
+      const sa = a.scheduled_at ?? a.created_at;
+      const sb = b.scheduled_at ?? b.created_at;
+      if (sa === sb) return a.created_at.localeCompare(b.created_at);
+      return sa.localeCompare(sb);
+    });
+
+  const assignments = new Map<string, { scheduled_at: string; queue_position: number }>();
+  let cursor = 0;
+
+  // Pinned ones keep their slot.
+  for (const p of pinned) {
+    if (!p.scheduled_at) continue;
+    assignments.set(p.id, {
+      scheduled_at: p.scheduled_at,
+      queue_position: 0, // will be re-numbered below
+    });
+  }
+
+  // Assign floating to next free slot.
+  for (const f of floating) {
+    while (cursor < upcoming.length && reserved.has(slotKey(upcoming[cursor]))) {
+      cursor++;
+    }
+    if (cursor >= upcoming.length) break; // out of horizon
+    const slot = upcoming[cursor];
+    reserved.add(slotKey(slot));
+    assignments.set(f.id, {
+      scheduled_at: slot.toISOString(),
+      queue_position: 0,
+    });
+    cursor++;
+  }
+
+  // Re-number queue_position by chronological scheduled_at.
+  const ordered = Array.from(assignments.entries()).sort((a, b) =>
+    a[1].scheduled_at.localeCompare(b[1].scheduled_at),
+  );
+  ordered.forEach(([id, val], idx) => {
+    val.queue_position = idx;
+    assignments.set(id, val);
+  });
+
+  // Persist only changed rows.
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const updates: Array<PromiseLike<unknown>> = [];
+  for (const [id, val] of assignments) {
+    const prev = byId.get(id);
+    if (!prev) continue;
+    if (prev.scheduled_at === val.scheduled_at && prev.queue_position === val.queue_position) {
+      continue;
+    }
+    updates.push(
       supabase
         .from("videos")
         .update({
-          queue_position: u.queue_position,
-          scheduled_at: u.scheduled_at,
+          scheduled_at: val.scheduled_at,
+          queue_position: val.queue_position,
         })
-        .eq("id", u.id),
-    ),
-  );
+        .eq("id", id),
+    );
+  }
+
+  if (updates.length > 0) {
+    await Promise.all(updates);
+  }
 }
 
-/** Append a fresh upload to the END of the workspace's pending queue. */
+/**
+ * Append a fresh upload. If `pinnedAt` is provided, the video is pinned to
+ * that exact slot (UTC ISO string). Otherwise it floats to the next free slot.
+ */
 export async function appendToQueue(payload: {
   workspaceId: string;
   storagePath: string;
   baseText: string;
   hashtags: string;
+  pinnedAt?: string | null;
 }): Promise<void> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Não autenticado");
 
-  const { data: maxRow } = await supabase
-    .from("videos")
-    .select("queue_position")
-    .eq("workspace_id", payload.workspaceId)
-    .eq("status", "pending")
-    .order("queue_position", { ascending: false, nullsFirst: false })
-    .limit(1)
-    .maybeSingle();
-
-  const nextPos = (maxRow?.queue_position ?? -1) + 1;
+  // If pinned, make sure the slot isn't already taken.
+  if (payload.pinnedAt) {
+    const targetKey = slotKey(payload.pinnedAt);
+    const { data: clash } = await supabase
+      .from("videos")
+      .select("id, scheduled_at")
+      .eq("workspace_id", payload.workspaceId)
+      .eq("status", "pending")
+      .not("scheduled_at", "is", null);
+    const taken = (clash ?? []).some(
+      (v) => v.scheduled_at && slotKey(v.scheduled_at) === targetKey,
+    );
+    if (taken) {
+      throw new Error("Esse horário já está ocupado por outro vídeo");
+    }
+  }
 
   const { error } = await supabase.from("videos").insert({
     workspace_id: payload.workspaceId,
@@ -82,8 +169,8 @@ export async function appendToQueue(payload: {
     caption: payload.baseText,
     hashtags: payload.hashtags,
     status: "pending",
-    queue_position: nextPos,
-    scheduled_at: scheduledDateFor(nextPos).toISOString(),
+    pinned: !!payload.pinnedAt,
+    scheduled_at: payload.pinnedAt ?? null,
     uploaded_by: user.id,
   });
 
@@ -92,7 +179,47 @@ export async function appendToQueue(payload: {
   await recomputeQueue(payload.workspaceId);
 }
 
-/** Mark as posted and stamp posted_at (used by auto-delete). */
+/**
+ * Move a video to a specific slot (drag-and-drop), pinning it there.
+ * If the target slot is already occupied, the existing pinned video at that
+ * slot is unpinned (becomes floating) so the queue can reflow around the move.
+ */
+export async function moveVideoToSlot(
+  videoId: string,
+  workspaceId: string,
+  slotIso: string,
+): Promise<void> {
+  const targetKey = slotKey(slotIso);
+
+  // Find any pending video already at this slot (other than the one being moved).
+  const { data: clash } = await supabase
+    .from("videos")
+    .select("id, scheduled_at, pinned")
+    .eq("workspace_id", workspaceId)
+    .eq("status", "pending")
+    .neq("id", videoId)
+    .not("scheduled_at", "is", null);
+
+  const occupant = (clash ?? []).find(
+    (v) => v.scheduled_at && slotKey(v.scheduled_at) === targetKey,
+  );
+
+  // If a pinned video occupies the slot, unpin it so it can flow to the next free slot.
+  if (occupant?.pinned) {
+    await supabase.from("videos").update({ pinned: false }).eq("id", occupant.id);
+  }
+
+  // Pin the moved video to the target slot.
+  const { error } = await supabase
+    .from("videos")
+    .update({ pinned: true, scheduled_at: slotIso })
+    .eq("id", videoId);
+  if (error) throw error;
+
+  await recomputeQueue(workspaceId);
+}
+
+/** Mark as posted and stamp posted_at. */
 export async function markPosted(id: string): Promise<void> {
   const { error } = await supabase
     .from("videos")
@@ -101,21 +228,13 @@ export async function markPosted(id: string): Promise<void> {
   if (error) throw error;
 }
 
-/** Skip: send to end of pending queue, recompute. */
+/** Skip: unpin and let recompute push it to the next free slot after others. */
 export async function skipVideo(id: string, workspaceId: string): Promise<void> {
-  const { data: maxRow } = await supabase
-    .from("videos")
-    .select("queue_position")
-    .eq("workspace_id", workspaceId)
-    .eq("status", "pending")
-    .order("queue_position", { ascending: false, nullsFirst: false })
-    .limit(1)
-    .maybeSingle();
-
-  const tailPos = (maxRow?.queue_position ?? 0) + 1000;
+  // Push it to the far future so the recompute treats it as last in chronological order.
+  const farFuture = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
   const { error } = await supabase
     .from("videos")
-    .update({ queue_position: tailPos })
+    .update({ pinned: false, scheduled_at: farFuture })
     .eq("id", id);
   if (error) throw error;
 
@@ -124,7 +243,6 @@ export async function skipVideo(id: string, workspaceId: string): Promise<void> 
 
 /**
  * Auto-delete posted videos older than 48h within a workspace.
- * Removes both DB rows and storage objects.
  */
 export async function autoDeleteOldPosted(workspaceId: string): Promise<number> {
   const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();

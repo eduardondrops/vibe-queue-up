@@ -2,11 +2,13 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell } from "@/components/AppShell";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { dayKey, slotLabelForDate } from "@/lib/scheduling";
 import { autoDeleteOldPosted } from "@/lib/queue";
-import { getWorkspace, type Workspace } from "@/lib/workspaces";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { getMyRole, getWorkspace, type Workspace } from "@/lib/workspaces";
+import { ChevronLeft, ChevronRight, UserPlus } from "lucide-react";
+import { InviteMemberDialog } from "@/components/InviteMemberDialog";
 
 export const Route = createFileRoute("/w/$workspaceId/")({
   head: () => ({
@@ -31,6 +33,7 @@ function WorkspaceCalendarPage() {
   const { workspaceId } = Route.useParams();
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [wsLoading, setWsLoading] = useState(true);
+  const [role, setRole] = useState<"owner" | "editor" | "viewer" | null>(null);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
@@ -41,14 +44,17 @@ function WorkspaceCalendarPage() {
     let cancel = false;
     (async () => {
       setWsLoading(true);
-      const w = await getWorkspace(workspaceId);
+      const [w, r] = await Promise.all([
+        getWorkspace(workspaceId),
+        getMyRole(workspaceId),
+      ]);
       if (!cancel) {
         setWorkspace(w);
+        setRole(r);
         setWsLoading(false);
         if (!w) {
           navigate({ to: "/" });
         } else {
-          // Fire-and-forget cleanup
           autoDeleteOldPosted(workspaceId).catch(() => {});
         }
       }
@@ -68,12 +74,18 @@ function WorkspaceCalendarPage() {
 
   return (
     <AppShell workspaceId={workspaceId} workspaceName={workspace.name}>
-      <Calendar workspaceId={workspaceId} />
+      <Calendar workspaceId={workspaceId} canInvite={role === "owner"} />
     </AppShell>
   );
 }
 
-function Calendar({ workspaceId }: { workspaceId: string }) {
+function Calendar({
+  workspaceId,
+  canInvite,
+}: {
+  workspaceId: string;
+  canInvite: boolean;
+}) {
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
     d.setDate(1);
@@ -81,6 +93,7 @@ function Calendar({ workspaceId }: { workspaceId: string }) {
   });
   const [byDay, setByDay] = useState<Record<string, DaySummary>>({});
   const [loading, setLoading] = useState(true);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   const monthLabel = cursor.toLocaleDateString("pt-BR", {
     month: "long",
@@ -143,7 +156,7 @@ function Calendar({ workspaceId }: { workspaceId: string }) {
     return days;
   }, [cursor.getFullYear(), cursor.getMonth()]);
 
-  const todayKey = dayKey(new Date());
+  const todayK = dayKey(new Date());
 
   return (
     <div>
@@ -188,6 +201,20 @@ function Calendar({ workspaceId }: { workspaceId: string }) {
         </div>
       </div>
 
+      {canInvite && (
+        <div className="mb-4 flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setInviteOpen(true)}
+            className="border-primary/40 text-primary hover:bg-primary/5"
+          >
+            <UserPlus className="mr-1.5 h-4 w-4" />
+            Convidar membro
+          </Button>
+        </div>
+      )}
+
       <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
         {["D", "S", "T", "Q", "Q", "S", "S"].map((d, i) => (
           <div key={i} className="py-1">
@@ -201,10 +228,11 @@ function Calendar({ workspaceId }: { workspaceId: string }) {
           const k = dayKey(d);
           const summary = byDay[k];
           const inMonth = d.getMonth() === cursor.getMonth();
-          const isToday = k === todayKey;
-          const isPast = k < todayKey;
+          const isToday = k === todayK;
+          const isPast = k < todayK;
           const hasItems = summary && summary.total > 0;
-          const clickable = inMonth && !isPast && (hasItems || isToday);
+          // Now: any future day (in or out of current month) is clickable.
+          const clickable = !isPast && (inMonth || hasItems);
 
           const baseClasses =
             "relative flex aspect-square flex-col items-center justify-start rounded-xl border p-1.5 text-xs transition-all";
@@ -306,6 +334,12 @@ function Calendar({ workspaceId }: { workspaceId: string }) {
           <span className="bg-muted-foreground h-2 w-2 rounded-full" /> Pulado
         </div>
       </div>
+
+      <InviteMemberDialog
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        workspaceId={workspaceId}
+      />
     </div>
   );
 }
