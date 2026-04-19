@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, KeyRound, Copy, Check, Trash2, RefreshCw } from "lucide-react";
+import { Loader2, KeyRound, Copy, Check, Trash2, RefreshCw, Download } from "lucide-react";
 import { toast } from "sonner";
 import {
   createToken,
@@ -71,6 +71,21 @@ export function ApiTokenSection({ userId }: { userId: string }) {
     }
   }
 
+  async function handleDownloadExtension() {
+    try {
+      const res = await fetch("/postflow-extension.zip");
+      if (!res.ok) throw new Error("Download falhou (" + res.status + ")");
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "postflow-extension.zip";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao baixar");
+    }
+  }
+
   return (
     <div className="mt-8">
       <h2 className="mb-3 font-display text-xl font-bold">Integração com Extensão Chrome</h2>
@@ -80,6 +95,16 @@ export function ApiTokenSection({ userId }: { userId: string }) {
           Gere um token para conectar a Extensão Chrome e receber notificações dos seus
           posts do dia. O token é pessoal — não compartilhe.
         </p>
+
+        <Button
+          onClick={handleDownloadExtension}
+          variant="outline"
+          size="sm"
+          className="w-full sm:w-auto"
+        >
+          <Download className="mr-2 h-4 w-4" /> Baixar extensão (.zip)
+        </Button>
+
 
         {loading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -149,18 +174,16 @@ export function ApiTokenSection({ userId }: { userId: string }) {
 
             <details className="mt-2 text-xs text-muted-foreground">
               <summary className="cursor-pointer hover:text-foreground">
-                Como usar na extensão
+                Como instalar e conectar
               </summary>
               <div className="mt-2 space-y-1 pl-2">
-                <p>1. Abra a extensão PostFlow no Chrome</p>
-                <p>2. Cole o token quando solicitado</p>
+                <p>1. Baixe o ZIP acima e descompacte</p>
                 <p>
-                  3. A extensão vai consultar{" "}
-                  <code className="rounded bg-surface px-1">
-                    /api/extension/posts-today
-                  </code>{" "}
-                  e te avisar antes de cada postagem
+                  2. Abra <code className="rounded bg-surface px-1">chrome://extensions</code>,
+                  ative <strong>Modo desenvolvedor</strong>
                 </p>
+                <p>3. Clique em <strong>Carregar sem compactação</strong> e selecione a pasta</p>
+                <p>4. Abra a extensão no Chrome e cole o token acima</p>
               </div>
             </details>
           </div>
