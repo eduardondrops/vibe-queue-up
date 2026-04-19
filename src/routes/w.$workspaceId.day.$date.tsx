@@ -271,14 +271,17 @@ function DayList({
       {loading ? (
         <p className="text-center text-sm text-muted-foreground">Carregando...</p>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-2">
           {slotView.map(({ iso, label, video, slotIsPast }) => {
             if (video) {
+              const isExpanded = expandedId === video.id;
               return (
-                <VideoCard
+                <VideoSlotItem
                   key={iso}
                   video={video}
-                  playbackUrl={signedUrls[video.id] ?? ""}
+                  expanded={isExpanded}
+                  onToggle={() => handleToggleExpand(video)}
+                  playbackUrl={isExpanded ? signedUrls[video.id] ?? "" : ""}
                   busy={busyId === video.id}
                   canEdit={canEdit && !isPast}
                   onPosted={() => handlePosted(video.id)}
