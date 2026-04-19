@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, KeyRound, Copy, Check, Trash2, RefreshCw } from "lucide-react";
+import { Loader2, KeyRound, Copy, Check, Trash2, RefreshCw, Download } from "lucide-react";
 import { toast } from "sonner";
 import {
   createToken,
