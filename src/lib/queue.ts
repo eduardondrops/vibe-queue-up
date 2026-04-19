@@ -9,6 +9,8 @@ export type QueueVideo = {
   caption: string;
   base_text: string;
   hashtags: string;
+  yt_title: string;
+  yt_description: string;
   status: "pending" | "posted" | "skipped";
   queue_position: number | null;
   scheduled_at: string | null;
@@ -137,6 +139,8 @@ export async function appendToQueue(payload: {
   storagePath: string;
   baseText: string;
   hashtags: string;
+  ytTitle?: string;
+  ytDescription?: string;
   pinnedAt?: string | null;
 }): Promise<void> {
   const {
@@ -168,6 +172,8 @@ export async function appendToQueue(payload: {
     base_text: payload.baseText,
     caption: payload.baseText,
     hashtags: payload.hashtags,
+    yt_title: payload.ytTitle ?? "",
+    yt_description: payload.ytDescription ?? "",
     status: "pending",
     pinned: !!payload.pinnedAt,
     scheduled_at: payload.pinnedAt ?? null,
