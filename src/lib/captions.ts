@@ -41,7 +41,7 @@ export function mergeHashtags(userTags: string, platform: Platform): string {
       merged.push(`#${tag}`);
     }
   }
-  return merged.slice(0, 30).join(" ");
+  return merged.slice(0, 5).join(" ");
 }
 
 /** CTA completo por plataforma (frase inteira). */
