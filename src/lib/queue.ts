@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { generateUpcomingSlots, slotKey } from "./scheduling";
+import { generateUpcomingSlots, getSlotsForDateKey, slotKey } from "./scheduling";
 
 export type QueueVideo = {
   id: string;
@@ -223,6 +223,50 @@ export async function moveVideoToSlot(
   if (error) throw error;
 
   await recomputeQueue(workspaceId);
+}
+
+/**
+ * Move a video to a target day (yyyy-mm-dd in SP). Picks the first free slot
+ * of that day and pins the video there. If all slots are taken, returns false
+ * so the caller can show feedback. The queue is recomputed after.
+ *
+ * Used by drag-and-drop on the monthly calendar.
+ */
+export async function moveVideoToDay(
+  videoId: string,
+  workspaceId: string,
+  dateKey: string,
+): Promise<{ ok: boolean; slotIso?: string; reason?: "full" | "past" }> {
+  const slots = getSlotsForDateKey(dateKey);
+  if (slots.length === 0) return { ok: false, reason: "past" };
+
+  // Find which slots are already taken by OTHER pending videos in this workspace.
+  const { data: others } = await supabase
+    .from("videos")
+    .select("id, scheduled_at")
+    .eq("workspace_id", workspaceId)
+    .eq("status", "pending")
+    .neq("id", videoId)
+    .not("scheduled_at", "is", null);
+
+  const taken = new Set(
+    (others ?? [])
+      .map((o) => (o.scheduled_at ? slotKey(o.scheduled_at) : null))
+      .filter((k): k is string => !!k),
+  );
+
+  const free = slots.find((s) => !taken.has(slotKey(s)));
+  if (!free) return { ok: false, reason: "full" };
+
+  const slotIso = free.toISOString();
+  const { error } = await supabase
+    .from("videos")
+    .update({ pinned: true, scheduled_at: slotIso })
+    .eq("id", videoId);
+  if (error) throw error;
+
+  await recomputeQueue(workspaceId);
+  return { ok: true, slotIso };
 }
 
 /** Mark as posted and stamp posted_at. */
