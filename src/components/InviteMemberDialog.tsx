@@ -193,6 +193,22 @@ export function InviteMemberDialog({
                   setEmail(e.target.value);
                   if (lookup.state !== "idle") setLookup({ state: "idle" });
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleSearch();
+                  }
+                }}
+                onBlur={() => {
+                  // Busca automaticamente ao sair do campo se houver email válido e ainda não buscou
+                  if (
+                    lookup.state === "idle" &&
+                    email.trim() &&
+                    /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())
+                  ) {
+                    handleSearch();
+                  }
+                }}
                 placeholder="pessoa@exemplo.com"
                 autoComplete="off"
               />
@@ -209,6 +225,11 @@ export function InviteMemberDialog({
                 )}
               </Button>
             </div>
+            {lookup.state === "idle" && (
+              <p className="text-[11px] text-muted-foreground">
+                Digite o email e tecle Enter (ou clique na lupa) para buscar a pessoa.
+              </p>
+            )}
           </div>
 
           {lookup.state === "found" && (
