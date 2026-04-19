@@ -109,7 +109,7 @@ function DayList({
     const { data, error } = await supabase
       .from("videos")
       .select(
-        "id, workspace_id, video_url, storage_path, caption, base_text, hashtags, status, queue_position, scheduled_at, posted_at, uploaded_by, pinned, created_at",
+        "id, workspace_id, video_url, storage_path, caption, base_text, hashtags, yt_title, yt_description, status, queue_position, scheduled_at, posted_at, uploaded_by, pinned, created_at",
       )
       .eq("workspace_id", workspaceId)
       .gte("scheduled_at", start.toISOString())
@@ -383,13 +383,10 @@ function VideoCard({
             </span>
           )}
         </div>
-        <a
-          href={playbackUrl}
-          download
-          className="flex items-center gap-1 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <Download className="h-3.5 w-3.5" /> Baixar
-        </a>
+        <DownloadVideoButton
+          storagePath={video.storage_path}
+          fileName={video.storage_path.split("/").pop() ?? "video.mp4"}
+        />
       </div>
 
       <video
@@ -401,8 +398,13 @@ function VideoCard({
       />
 
       <div className="space-y-4 p-4">
-        {(baseText || video.hashtags) && (
-          <PlatformCaptions baseText={baseText} hashtags={video.hashtags} />
+        {(baseText || video.hashtags || video.yt_title || video.yt_description) && (
+          <PlatformCaptions
+            baseText={baseText}
+            hashtags={video.hashtags}
+            ytTitle={video.yt_title}
+            ytDescription={video.yt_description}
+          />
         )}
 
         {video.status === "pending" && (
