@@ -264,13 +264,18 @@ function DayList({
       >
         <ChevronLeft className="h-4 w-4" /> Calendário
       </Link>
-      <div className="mb-6">
-        <p className="text-xs uppercase tracking-widest text-muted-foreground">
-          Agenda do dia
-        </p>
-        <h1 className="mt-1 font-display text-3xl font-bold capitalize">
-          {dateLabel}
-        </h1>
+      <div className="mb-6 flex items-end justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">
+            Agenda do dia
+          </p>
+          <h1 className="mt-1 font-display text-3xl font-bold capitalize">
+            {dateLabel}
+          </h1>
+        </div>
+        {videos.length > 0 && (
+          <DownloadAllButton videos={videos} dateKey={dKey} />
+        )}
       </div>
 
       {loading ? (
