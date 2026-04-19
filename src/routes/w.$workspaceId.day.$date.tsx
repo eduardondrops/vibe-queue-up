@@ -129,19 +129,33 @@ function DayList({
 
     const list = (data ?? []) as QueueVideo[];
     setVideos(list);
-
-    const urls: Record<string, string> = {};
-    await Promise.all(
-      list.map(async (v) => {
-        const { data: signed } = await supabase.storage
-          .from("videos")
-          .createSignedUrl(v.storage_path, 3600);
-        if (signed?.signedUrl) urls[v.id] = signed.signedUrl;
-      }),
-    );
-    setSignedUrls(urls);
     setLoading(false);
   }, [dKey, workspaceId]);
+
+  /**
+   * Lazy load: pede signed URL apenas quando o usuário expande o card.
+   * Mantém em cache para evitar requisições repetidas ao re-expandir.
+   */
+  const ensureSignedUrl = useCallback(
+    async (video: QueueVideo) => {
+      if (signedUrls[video.id]) return;
+      const { data: signed } = await supabase.storage
+        .from("videos")
+        .createSignedUrl(video.storage_path, 3600);
+      if (signed?.signedUrl) {
+        setSignedUrls((prev) => ({ ...prev, [video.id]: signed.signedUrl }));
+      }
+    },
+    [signedUrls],
+  );
+
+  function handleToggleExpand(video: QueueVideo) {
+    setExpandedId((curr) => {
+      const next = curr === video.id ? null : video.id;
+      if (next) void ensureSignedUrl(video);
+      return next;
+    });
+  }
 
   useEffect(() => {
     load();
