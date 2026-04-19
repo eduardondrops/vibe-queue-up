@@ -1,7 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useServerFn } from "@tanstack/react-start";
-import { createWorkspaceInvitation } from "@/lib/invitations.functions";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Mail, Search, UserPlus } from "lucide-react";
+import { Loader2, Search, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 
@@ -35,12 +33,10 @@ export function InviteMemberDialog({
   onInvited?: () => void;
 }) {
   const { user } = useAuth();
-  const sendInvite = useServerFn(createWorkspaceInvitation);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"editor" | "viewer">("editor");
   const [lookup, setLookup] = useState<LookupState>({ state: "idle" });
   const [adding, setAdding] = useState(false);
-  const [sending, setSending] = useState(false);
   const [workspaceName, setWorkspaceName] = useState<string>("");
 
   useEffect(() => {
@@ -49,7 +45,6 @@ export function InviteMemberDialog({
       setRole("editor");
       setLookup({ state: "idle" });
       setAdding(false);
-      setSending(false);
       return;
     }
     if (!user) return;
@@ -95,7 +90,6 @@ export function InviteMemberDialog({
     });
   }
 
-  // Adiciona direto (apenas para usuários já existentes)
   async function handleAddDirect(e: FormEvent) {
     e.preventDefault();
     if (lookup.state !== "found") return;
@@ -122,36 +116,14 @@ export function InviteMemberDialog({
     }
   }
 
-  // Envia convite por email (usuário não tem conta OU sempre que escolher essa opção)
-  async function handleSendInvite() {
-    const value = email.trim().toLowerCase();
-    if (!value || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) {
-      toast.error("Email inválido");
-      return;
-    }
-    setSending(true);
-    try {
-      await sendInvite({
-        data: { workspaceId, email: value, role },
-      });
-      toast.success(`Convite enviado para ${value}`);
-      onInvited?.();
-      onOpenChange(false);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao enviar convite");
-    } finally {
-      setSending(false);
-    }
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Convidar para {workspaceName || "este perfil"}</DialogTitle>
+          <DialogTitle>Adicionar membro a {workspaceName || "este perfil"}</DialogTitle>
           <DialogDescription>
-            Envie um convite por email — a pessoa cria conta (ou faz login) e entra
-            direto no perfil.
+            A pessoa precisa ter uma conta no PostFlow. Peça para ela se cadastrar em{" "}
+            <strong>/auth</strong> e depois busque o email aqui.
           </DialogDescription>
         </DialogHeader>
 
@@ -217,49 +189,24 @@ export function InviteMemberDialog({
             <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm">
               <div>
                 <p className="font-medium">{lookup.displayName ?? lookup.email}</p>
-                <p className="text-xs text-muted-foreground">
-                  {lookup.email} — já tem conta no PostFlow
-                </p>
+                <p className="text-xs text-muted-foreground">{lookup.email}</p>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button
-                  type="submit"
-                  disabled={adding || sending}
-                  className="grad-bg flex-1 text-primary-foreground hover:opacity-90"
-                >
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  {adding ? "Adicionando..." : "Adicionar agora"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={adding || sending}
-                  onClick={handleSendInvite}
-                  className="flex-1"
-                >
-                  <Mail className="mr-2 h-4 w-4" />
-                  {sending ? "Enviando..." : "Enviar por email"}
-                </Button>
-              </div>
+              <Button
+                type="submit"
+                disabled={adding}
+                className="grad-bg w-full text-primary-foreground hover:opacity-90"
+              >
+                <UserPlus className="mr-2 h-4 w-4" />
+                {adding ? "Adicionando..." : "Adicionar ao perfil"}
+              </Button>
             </div>
           )}
 
           {lookup.state === "not_found" && (
-            <div className="space-y-3 rounded-xl border border-border bg-surface p-3 text-sm">
-              <p className="text-muted-foreground">
-                <strong className="text-foreground">{lookup.email}</strong> ainda não tem
-                conta. Envie um convite — ela cria a conta pelo link e entra direto neste
-                perfil.
-              </p>
-              <Button
-                type="button"
-                onClick={handleSendInvite}
-                disabled={sending}
-                className="grad-bg w-full text-primary-foreground hover:opacity-90"
-              >
-                <Mail className="mr-2 h-4 w-4" />
-                {sending ? "Enviando convite..." : "Enviar convite por email"}
-              </Button>
+            <div className="rounded-xl border border-border bg-surface p-3 text-sm text-muted-foreground">
+              <strong className="text-foreground">{lookup.email}</strong> ainda não tem
+              conta. Peça para a pessoa se cadastrar em <strong>/auth</strong> primeiro,
+              depois volte aqui e busque o email novamente.
             </div>
           )}
 
