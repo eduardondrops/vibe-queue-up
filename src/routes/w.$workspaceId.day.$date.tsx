@@ -291,6 +291,7 @@ function DayList({
                   onSkip={() => handleSkip(video.id)}
                   onMove={(targetIso) => handleMove(video.id, targetIso)}
                   onTogglePin={() => handleTogglePin(video.id, video.pinned)}
+                  onEdit={() => setEditingId(video.id)}
                   workspaceId={workspaceId}
                 />
               );
