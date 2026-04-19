@@ -100,6 +100,7 @@ function DayList({
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const isPast = dKey < todayKey();
   const isToday = dKey === todayKey();
