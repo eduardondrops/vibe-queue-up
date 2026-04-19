@@ -20,6 +20,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { PlatformCaptions } from "@/components/PlatformCaptions";
+import { EditPostDialog } from "@/components/EditPostDialog";
 import {
   ChevronLeft,
   ChevronDown,
@@ -31,6 +32,7 @@ import {
   Pin,
   PinOff,
   Plus,
+  Pencil,
   CircleDashed,
   CheckCircle2,
   SkipForward as SkipIcon,
