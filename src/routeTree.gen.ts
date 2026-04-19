@@ -14,6 +14,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as WWorkspaceIdIndexRouteImport } from './routes/w.$workspaceId.index'
 import { Route as WWorkspaceIdUploadRouteImport } from './routes/w.$workspaceId.upload'
 import { Route as WWorkspaceIdSettingsRouteImport } from './routes/w.$workspaceId.settings'
+import { Route as ApiExtensionPostsTodayRouteImport } from './routes/api.extension.posts-today'
 import { Route as WWorkspaceIdDayDateRouteImport } from './routes/w.$workspaceId.day.$date'
 
 const AuthRoute = AuthRouteImport.update({
@@ -41,6 +42,11 @@ const WWorkspaceIdSettingsRoute = WWorkspaceIdSettingsRouteImport.update({
   path: '/w/$workspaceId/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiExtensionPostsTodayRoute = ApiExtensionPostsTodayRouteImport.update({
+  id: '/api/extension/posts-today',
+  path: '/api/extension/posts-today',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WWorkspaceIdDayDateRoute = WWorkspaceIdDayDateRouteImport.update({
   id: '/w/$workspaceId/day/$date',
   path: '/w/$workspaceId/day/$date',
@@ -50,6 +56,7 @@ const WWorkspaceIdDayDateRoute = WWorkspaceIdDayDateRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/api/extension/posts-today': typeof ApiExtensionPostsTodayRoute
   '/w/$workspaceId/settings': typeof WWorkspaceIdSettingsRoute
   '/w/$workspaceId/upload': typeof WWorkspaceIdUploadRoute
   '/w/$workspaceId/': typeof WWorkspaceIdIndexRoute
@@ -58,6 +65,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/api/extension/posts-today': typeof ApiExtensionPostsTodayRoute
   '/w/$workspaceId/settings': typeof WWorkspaceIdSettingsRoute
   '/w/$workspaceId/upload': typeof WWorkspaceIdUploadRoute
   '/w/$workspaceId': typeof WWorkspaceIdIndexRoute
@@ -67,6 +75,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/api/extension/posts-today': typeof ApiExtensionPostsTodayRoute
   '/w/$workspaceId/settings': typeof WWorkspaceIdSettingsRoute
   '/w/$workspaceId/upload': typeof WWorkspaceIdUploadRoute
   '/w/$workspaceId/': typeof WWorkspaceIdIndexRoute
@@ -77,6 +86,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/api/extension/posts-today'
     | '/w/$workspaceId/settings'
     | '/w/$workspaceId/upload'
     | '/w/$workspaceId/'
@@ -85,6 +95,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/api/extension/posts-today'
     | '/w/$workspaceId/settings'
     | '/w/$workspaceId/upload'
     | '/w/$workspaceId'
@@ -93,6 +104,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/auth'
+    | '/api/extension/posts-today'
     | '/w/$workspaceId/settings'
     | '/w/$workspaceId/upload'
     | '/w/$workspaceId/'
@@ -102,6 +114,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
+  ApiExtensionPostsTodayRoute: typeof ApiExtensionPostsTodayRoute
   WWorkspaceIdSettingsRoute: typeof WWorkspaceIdSettingsRoute
   WWorkspaceIdUploadRoute: typeof WWorkspaceIdUploadRoute
   WWorkspaceIdIndexRoute: typeof WWorkspaceIdIndexRoute
@@ -145,6 +158,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WWorkspaceIdSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/extension/posts-today': {
+      id: '/api/extension/posts-today'
+      path: '/api/extension/posts-today'
+      fullPath: '/api/extension/posts-today'
+      preLoaderRoute: typeof ApiExtensionPostsTodayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/w/$workspaceId/day/$date': {
       id: '/w/$workspaceId/day/$date'
       path: '/w/$workspaceId/day/$date'
@@ -158,6 +178,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
+  ApiExtensionPostsTodayRoute: ApiExtensionPostsTodayRoute,
   WWorkspaceIdSettingsRoute: WWorkspaceIdSettingsRoute,
   WWorkspaceIdUploadRoute: WWorkspaceIdUploadRoute,
   WWorkspaceIdIndexRoute: WWorkspaceIdIndexRoute,
