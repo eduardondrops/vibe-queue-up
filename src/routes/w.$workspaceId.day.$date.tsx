@@ -22,6 +22,7 @@ import {
 import { PlatformCaptions } from "@/components/PlatformCaptions";
 import {
   ChevronLeft,
+  ChevronDown,
   Download,
   Check,
   SkipForward,
@@ -30,6 +31,9 @@ import {
   Pin,
   PinOff,
   Plus,
+  CircleDashed,
+  CheckCircle2,
+  SkipForward as SkipIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
