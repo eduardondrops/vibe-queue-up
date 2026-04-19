@@ -378,6 +378,7 @@ function VideoSlotItem({
   onSkip,
   onMove,
   onTogglePin,
+  onEdit,
 }: {
   video: QueueVideo;
   expanded: boolean;
@@ -390,6 +391,7 @@ function VideoSlotItem({
   onSkip: () => void;
   onMove: (targetIso: string) => void;
   onTogglePin: () => void;
+  onEdit: () => void;
 }) {
   const time = video.scheduled_at ? slotLabelForDate(video.scheduled_at) : "--:--";
   const baseText = video.base_text || video.caption;
