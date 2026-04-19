@@ -248,8 +248,48 @@ export async function skipVideo(id: string, workspaceId: string): Promise<void> 
 }
 
 /**
- * Auto-delete posted videos older than 48h within a workspace.
+ * Fila inteligente: detecta vídeos pendentes cujo horário + buffer já passou
+ * sem terem sido marcados como postados, desafixa eles e empurra para o fim
+ * da fila. O recomputeQueue em seguida realoca tudo para os próximos slots
+ * livres, fazendo a agenda "rolar" sozinha.
+ *
+ * Buffer padrão: 30 minutos.
  */
+export async function autoSkipOverdue(
+  workspaceId: string,
+  bufferMinutes = 30,
+): Promise<number> {
+  const cutoff = new Date(Date.now() - bufferMinutes * 60 * 1000).toISOString();
+  const { data: overdue } = await supabase
+    .from("videos")
+    .select("id, scheduled_at")
+    .eq("workspace_id", workspaceId)
+    .eq("status", "pending")
+    .not("scheduled_at", "is", null)
+    .lt("scheduled_at", cutoff);
+
+  if (!overdue || overdue.length === 0) return 0;
+
+  // Empurra cada um para um futuro distante, escalonando para preservar a ordem relativa.
+  // O recompute em seguida vai colocá-los nos próximos slots livres na mesma ordem.
+  const baseFuture = Date.now() + 365 * 24 * 60 * 60 * 1000;
+  await Promise.all(
+    overdue.map((v, idx) =>
+      supabase
+        .from("videos")
+        .update({
+          pinned: false,
+          scheduled_at: new Date(baseFuture + idx * 60 * 1000).toISOString(),
+        })
+        .eq("id", v.id),
+    ),
+  );
+
+  await recomputeQueue(workspaceId);
+  return overdue.length;
+}
+
+
 export async function autoDeleteOldPosted(workspaceId: string): Promise<number> {
   const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
   const { data: stale } = await supabase
