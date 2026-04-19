@@ -14,9 +14,10 @@ import {
   type Workspace,
 } from "@/lib/workspaces";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, ImagePlus, UserPlus, Trash2, Search } from "lucide-react";
+import { Loader2, ImagePlus, UserPlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ApiTokenSection } from "@/components/ApiTokenSection";
+import { InviteMemberDialog } from "@/components/InviteMemberDialog";
 
 export const Route = createFileRoute("/w/$workspaceId/settings")({
   head: () => ({
