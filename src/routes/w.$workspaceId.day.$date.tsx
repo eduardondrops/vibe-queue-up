@@ -13,6 +13,7 @@ import {
 } from "@/lib/scheduling";
 import { markPosted, moveVideoToSlot, skipVideo, type QueueVideo } from "@/lib/queue";
 import { getMyRole, getWorkspace, type Workspace } from "@/lib/workspaces";
+import { generateCaption, buildYouTube } from "@/lib/captions";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
