@@ -356,8 +356,16 @@ function EmptySlotCard({
   );
 }
 
-function VideoCard({
+/**
+ * Item de slot do dia em modo compacto + expansão sob demanda.
+ * - Compacto: linha única com horário, título (yt_title ou 1ª linha do base_text), status.
+ * - Expandido: player (lazy), legendas por plataforma e ações (postar/pular/mover/fixar).
+ * Apenas um item pode estar expandido por vez (controlado pelo pai).
+ */
+function VideoSlotItem({
   video,
+  expanded,
+  onToggle,
   playbackUrl,
   busy,
   canEdit,
@@ -368,6 +376,8 @@ function VideoCard({
   onTogglePin,
 }: {
   video: QueueVideo;
+  expanded: boolean;
+  onToggle: () => void;
   playbackUrl: string;
   busy: boolean;
   canEdit: boolean;
@@ -378,118 +388,172 @@ function VideoCard({
   onTogglePin: () => void;
 }) {
   const time = video.scheduled_at ? slotLabelForDate(video.scheduled_at) : "--:--";
-  const statusBadge = {
-    pending: { label: "Pendente", cls: "grad-bg text-primary-foreground" },
-    posted: { label: "Postado", cls: "bg-success text-success-foreground" },
-    skipped: { label: "Pulado", cls: "bg-muted text-muted-foreground" },
-  }[video.status];
-
   const baseText = video.base_text || video.caption;
 
+  // Título: yt_title prioritário; fallback = primeira linha não vazia do base_text/caption.
+  const title = (() => {
+    if (video.yt_title?.trim()) return video.yt_title.trim();
+    const firstLine = baseText
+      .split("\n")
+      .map((l) => l.trim())
+      .find((l) => l.length > 0);
+    return firstLine || "Sem título";
+  })();
+
+  const statusMeta = {
+    pending: {
+      label: "Não postado",
+      Icon: CircleDashed,
+      cls: "text-muted-foreground",
+    },
+    posted: {
+      label: "Postado",
+      Icon: CheckCircle2,
+      cls: "text-success",
+    },
+    skipped: {
+      label: "Pulado",
+      Icon: SkipIcon,
+      cls: "text-muted-foreground/70",
+    },
+  }[video.status];
+  const StatusIcon = statusMeta.Icon;
+
   return (
-    <article className="glass overflow-hidden rounded-2xl shadow-[var(--shadow-card)]">
-      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2">
-          <span className="font-display text-2xl font-bold">{time}</span>
-          <span
-            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${statusBadge.cls}`}
-          >
-            {statusBadge.label}
-          </span>
-          {video.pinned && (
-            <span
-              title="Vídeo fixado neste horário"
-              className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary"
-            >
-              <Pin className="inline h-3 w-3" /> Fixo
-            </span>
-          )}
-        </div>
-        <DownloadVideoButton
-          storagePath={video.storage_path}
-          fileName={video.storage_path.split("/").pop() ?? "video.mp4"}
-        />
-      </div>
-
-      <video
-        src={playbackUrl}
-        controls
-        playsInline
-        preload="metadata"
-        className="aspect-[9/16] w-full bg-black"
-      />
-
-      <div className="space-y-4 p-4">
-        {(baseText || video.hashtags || video.yt_title || video.yt_description) && (
-          <PlatformCaptions
-            baseText={baseText}
-            hashtags={video.hashtags}
-            ytTitle={video.yt_title}
-            ytDescription={video.yt_description}
+    <article
+      className={`glass overflow-hidden rounded-2xl shadow-[var(--shadow-card)] transition-all duration-200 ${
+        expanded ? "ring-1 ring-primary/40" : ""
+      }`}
+    >
+      {/* Linha compacta — sempre visível, clicável */}
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface/40"
+      >
+        <span className="shrink-0 font-display text-lg font-bold tabular-nums">
+          {time}h
+        </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+          {title}
+        </span>
+        {video.pinned && (
+          <Pin
+            className="h-3.5 w-3.5 shrink-0 text-primary"
+            aria-label="Fixado"
           />
         )}
+        <span
+          className={`flex shrink-0 items-center gap-1 text-[11px] font-medium ${statusMeta.cls}`}
+        >
+          <StatusIcon className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">{statusMeta.label}</span>
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${
+            expanded ? "rotate-180" : ""
+          }`}
+        />
+      </button>
 
-        {video.status === "pending" && (
-          <>
-            <div className="flex gap-2 pt-1">
-              <Button
-                onClick={onPosted}
-                disabled={busy}
-                className="flex-1 bg-success text-success-foreground hover:bg-success/90"
-              >
-                {busy ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    <Check className="mr-1 h-4 w-4" /> Postado
-                  </>
-                )}
-              </Button>
-              <Button
-                onClick={onSkip}
-                disabled={busy}
-                variant="outline"
-                className="flex-1"
-              >
-                <SkipForward className="mr-1 h-4 w-4" /> Pular
-              </Button>
+      {/* Conteúdo expandido — player só carrega quando expanded=true */}
+      {expanded && (
+        <div className="border-t border-border">
+          <div className="flex items-center justify-end gap-2 px-4 py-2">
+            <DownloadVideoButton
+              storagePath={video.storage_path}
+              fileName={video.storage_path.split("/").pop() ?? "video.mp4"}
+            />
+          </div>
+
+          {playbackUrl ? (
+            <video
+              src={playbackUrl}
+              controls
+              playsInline
+              preload="metadata"
+              className="aspect-[9/16] w-full bg-black"
+            />
+          ) : (
+            <div className="flex aspect-[9/16] w-full items-center justify-center bg-black text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin" />
             </div>
+          )}
 
-            {canEdit && (
-              <div className="flex gap-2">
-                <MoveVideoButton
-                  workspaceId={workspaceId}
-                  currentVideoId={video.id}
-                  currentScheduledAt={video.scheduled_at}
-                  onMove={onMove}
-                  disabled={busy}
-                />
-                <Button
-                  onClick={onTogglePin}
-                  disabled={busy}
-                  variant="outline"
-                  className="flex-1"
-                  title={
-                    video.pinned
-                      ? "Desafixar — pode ser realocado pela fila"
-                      : "Fixar neste horário"
-                  }
-                >
-                  {video.pinned ? (
-                    <>
-                      <PinOff className="mr-1 h-4 w-4" /> Desafixar
-                    </>
-                  ) : (
-                    <>
-                      <Pin className="mr-1 h-4 w-4" /> Fixar
-                    </>
-                  )}
-                </Button>
-              </div>
+          <div className="space-y-4 p-4">
+            {(baseText || video.hashtags || video.yt_title || video.yt_description) && (
+              <PlatformCaptions
+                baseText={baseText}
+                hashtags={video.hashtags}
+                ytTitle={video.yt_title}
+                ytDescription={video.yt_description}
+              />
             )}
-          </>
-        )}
-      </div>
+
+            {video.status === "pending" && (
+              <>
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    onClick={onPosted}
+                    disabled={busy}
+                    className="flex-1 bg-success text-success-foreground hover:bg-success/90"
+                  >
+                    {busy ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Check className="mr-1 h-4 w-4" /> Postado
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={onSkip}
+                    disabled={busy}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    <SkipForward className="mr-1 h-4 w-4" /> Pular
+                  </Button>
+                </div>
+
+                {canEdit && (
+                  <div className="flex gap-2">
+                    <MoveVideoButton
+                      workspaceId={workspaceId}
+                      currentVideoId={video.id}
+                      currentScheduledAt={video.scheduled_at}
+                      onMove={onMove}
+                      disabled={busy}
+                    />
+                    <Button
+                      onClick={onTogglePin}
+                      disabled={busy}
+                      variant="outline"
+                      className="flex-1"
+                      title={
+                        video.pinned
+                          ? "Desafixar — pode ser realocado pela fila"
+                          : "Fixar neste horário"
+                      }
+                    >
+                      {video.pinned ? (
+                        <>
+                          <PinOff className="mr-1 h-4 w-4" /> Desafixar
+                        </>
+                      ) : (
+                        <>
+                          <Pin className="mr-1 h-4 w-4" /> Fixar
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </article>
   );
 }
