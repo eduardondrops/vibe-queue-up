@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as WWorkspaceIdIndexRouteImport } from './routes/w.$workspaceId.index'
 import { Route as WWorkspaceIdUploadRouteImport } from './routes/w.$workspaceId.upload'
 import { Route as WWorkspaceIdSettingsRouteImport } from './routes/w.$workspaceId.settings'
@@ -25,6 +26,11 @@ const AuthRoute = AuthRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InviteTokenRoute = InviteTokenRouteImport.update({
+  id: '/invite/$token',
+  path: '/invite/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WWorkspaceIdIndexRoute = WWorkspaceIdIndexRouteImport.update({
@@ -56,6 +62,7 @@ const WWorkspaceIdDayDateRoute = WWorkspaceIdDayDateRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/api/extension/posts-today': typeof ApiExtensionPostsTodayRoute
   '/w/$workspaceId/settings': typeof WWorkspaceIdSettingsRoute
   '/w/$workspaceId/upload': typeof WWorkspaceIdUploadRoute
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/api/extension/posts-today': typeof ApiExtensionPostsTodayRoute
   '/w/$workspaceId/settings': typeof WWorkspaceIdSettingsRoute
   '/w/$workspaceId/upload': typeof WWorkspaceIdUploadRoute
@@ -75,6 +83,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/api/extension/posts-today': typeof ApiExtensionPostsTodayRoute
   '/w/$workspaceId/settings': typeof WWorkspaceIdSettingsRoute
   '/w/$workspaceId/upload': typeof WWorkspaceIdUploadRoute
@@ -86,6 +95,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/invite/$token'
     | '/api/extension/posts-today'
     | '/w/$workspaceId/settings'
     | '/w/$workspaceId/upload'
@@ -95,6 +105,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/invite/$token'
     | '/api/extension/posts-today'
     | '/w/$workspaceId/settings'
     | '/w/$workspaceId/upload'
@@ -104,6 +115,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/auth'
+    | '/invite/$token'
     | '/api/extension/posts-today'
     | '/w/$workspaceId/settings'
     | '/w/$workspaceId/upload'
@@ -114,6 +126,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
+  InviteTokenRoute: typeof InviteTokenRoute
   ApiExtensionPostsTodayRoute: typeof ApiExtensionPostsTodayRoute
   WWorkspaceIdSettingsRoute: typeof WWorkspaceIdSettingsRoute
   WWorkspaceIdUploadRoute: typeof WWorkspaceIdUploadRoute
@@ -135,6 +148,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invite/$token': {
+      id: '/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof InviteTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/w/$workspaceId/': {
@@ -178,6 +198,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
+  InviteTokenRoute: InviteTokenRoute,
   ApiExtensionPostsTodayRoute: ApiExtensionPostsTodayRoute,
   WWorkspaceIdSettingsRoute: WWorkspaceIdSettingsRoute,
   WWorkspaceIdUploadRoute: WWorkspaceIdUploadRoute,
