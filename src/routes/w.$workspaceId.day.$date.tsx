@@ -13,6 +13,7 @@ import {
 } from "@/lib/scheduling";
 import { markPosted, moveVideoToSlot, skipVideo, type QueueVideo } from "@/lib/queue";
 import { getMyRole, getWorkspace, type Workspace } from "@/lib/workspaces";
+import { generateCaption, buildYouTube } from "@/lib/captions";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -25,6 +26,7 @@ import {
   ChevronLeft,
   ChevronDown,
   Download,
+  DownloadCloud,
   Check,
   SkipForward,
   Loader2,
@@ -262,13 +264,18 @@ function DayList({
       >
         <ChevronLeft className="h-4 w-4" /> Calendário
       </Link>
-      <div className="mb-6">
-        <p className="text-xs uppercase tracking-widest text-muted-foreground">
-          Agenda do dia
-        </p>
-        <h1 className="mt-1 font-display text-3xl font-bold capitalize">
-          {dateLabel}
-        </h1>
+      <div className="mb-6 flex items-end justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">
+            Agenda do dia
+          </p>
+          <h1 className="mt-1 font-display text-3xl font-bold capitalize">
+            {dateLabel}
+          </h1>
+        </div>
+        {videos.length > 0 && (
+          <DownloadAllButton videos={videos} dateKey={dKey} />
+        )}
       </div>
 
       {loading ? (
@@ -786,3 +793,134 @@ function DownloadVideoButton({
   );
 }
 
+/**
+ * "Baixar tudo" — para cada vídeo do dia, dispara o download do MP4 e
+ * de um .txt com legendas (Instagram/TikTok/Facebook) + título e descrição
+ * do YouTube. Usa signed URLs frescas (1h). Sem ZIP — links separados.
+ */
+function DownloadAllButton({
+  videos,
+  dateKey: dKey,
+}: {
+  videos: QueueVideo[];
+  dateKey: string;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  function buildCaptionsTxt(v: QueueVideo): string {
+    const baseText = v.base_text || v.caption || "";
+    const yt = buildYouTube({
+      baseText,
+      hashtags: v.hashtags,
+      ytTitle: v.yt_title,
+      ytDescription: v.yt_description,
+    });
+    const ig = generateCaption("instagram", baseText, v.hashtags);
+    const tt = generateCaption("tiktok", baseText, v.hashtags);
+    const fb = generateCaption("facebook", baseText, v.hashtags);
+    const sep = "\n\n----------------------------------------\n\n";
+    return [
+      `=== INSTAGRAM ===\n${ig}`,
+      `=== TIKTOK ===\n${tt}`,
+      `=== YOUTUBE ===\nTítulo: ${yt.title}\n\n${yt.description}\n\n${yt.hashtags}`,
+      `=== FACEBOOK ===\n${fb}`,
+    ].join(sep);
+  }
+
+  function downloadBlob(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function safeName(s: string): string {
+    return s
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9-_]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 60) || "post";
+  }
+
+  async function handleDownloadAll() {
+    if (busy) return;
+    setBusy(true);
+    const total = videos.length;
+    toast.info(`Iniciando download de ${total} post${total > 1 ? "s" : ""}...`);
+    let ok = 0;
+    let fail = 0;
+
+    for (let i = 0; i < videos.length; i++) {
+      const v = videos[i];
+      const time = v.scheduled_at
+        ? slotLabelForDate(v.scheduled_at).replace(":", "h")
+        : "auto";
+      const titleSrc = v.yt_title?.trim() || (v.base_text || v.caption).split("\n")[0] || "post";
+      const baseName = `${dKey}_${time}_${safeName(titleSrc)}`;
+
+      try {
+        // 1) Legendas (.txt)
+        const txt = buildCaptionsTxt(v);
+        downloadBlob(
+          new Blob([txt], { type: "text/plain;charset=utf-8" }),
+          `${baseName}.txt`,
+        );
+
+        // 2) Vídeo (signed URL com download forçado)
+        const ext = v.storage_path.split(".").pop() || "mp4";
+        const { data, error } = await supabase.storage
+          .from("videos")
+          .createSignedUrl(v.storage_path, 3600, {
+            download: `${baseName}.${ext}`,
+          });
+        if (error || !data?.signedUrl) throw error ?? new Error("Sem URL");
+
+        const a = document.createElement("a");
+        a.href = data.signedUrl;
+        a.download = `${baseName}.${ext}`;
+        a.target = "_blank";
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        ok++;
+        // Espaça os downloads para o browser não bloquear
+        await new Promise((r) => setTimeout(r, 600));
+      } catch (err) {
+        console.error("Falha ao baixar", v.id, err);
+        fail++;
+      }
+    }
+
+    setBusy(false);
+    if (fail === 0) {
+      toast.success(`${ok} post${ok > 1 ? "s baixados" : " baixado"} com sucesso`);
+    } else {
+      toast.warning(`${ok} baixados, ${fail} falharam`);
+    }
+  }
+
+  return (
+    <Button
+      type="button"
+      onClick={handleDownloadAll}
+      disabled={busy}
+      variant="outline"
+      className="gap-2"
+    >
+      {busy ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <DownloadCloud className="h-4 w-4" />
+      )}
+      Baixar tudo
+    </Button>
+  );
+}
