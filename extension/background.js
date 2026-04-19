@@ -1,69 +1,41 @@
 // PostFlow Notifier — background service worker (MV3)
-const API_URL = "https://vibe-queue-up.lovable.app/api/extension/posts-today";
-const POLL_MIN = 5; // poll every 5 min
+// Estratégia: 1 alarme recorrente a cada 1 min faz polling + checagem de janelas.
+// - Janela "warn":  -10min < diff <= -9min  (10 minutos antes)
+// - Janela "fire":   -1min < diff <=  0min  (na hora exata)
+// De-dup persistente em chrome.storage por (postId + kind + dia).
+
+const APP_ORIGIN = "https://vibe-queue-up.lovable.app";
+const API_URL = `${APP_ORIGIN}/api/extension/posts-today`;
 const POLL_ALARM = "postflow-poll";
+const POLL_PERIOD_MIN = 1;
+
+// Mutex simples para evitar execuções concorrentes
+let runLock = false;
 
 async function getToken() {
   const { token } = await chrome.storage.local.get("token");
   return token || null;
+}
+async function clearToken() {
+  await chrome.storage.local.remove("token");
 }
 
 async function fetchPosts(token) {
   const tzOffsetMinutes = new Date().getTimezoneOffset();
   const res = await fetch(`${API_URL}?tzOffsetMinutes=${tzOffsetMinutes}`, {
     headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
   });
-  if (!res.ok) throw new Error("HTTP " + res.status);
-  return res.json();
+  return res;
 }
 
-function alarmName(postId, kind) {
-  return `post:${postId}:${kind}`; // kind = "warn" | "fire"
+function dayKey(iso) {
+  // Usa data local do navegador
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-
-function notifKey(postId, kind, dateIso) {
-  return `${postId}:${kind}:${dateIso}`;
-}
-
-async function clearAllPostAlarms() {
-  const all = await chrome.alarms.getAll();
-  for (const a of all) {
-    if (a.name.startsWith("post:")) await chrome.alarms.clear(a.name);
-  }
-}
-
-async function scheduleAlarmsForPosts(posts) {
-  await clearAllPostAlarms();
-  const now = Date.now();
-  for (const p of posts || []) {
-    if (p.status === "posted" || p.status === "skipped") continue;
-    if (!p.scheduled_at) continue;
-    const target = new Date(p.scheduled_at).getTime();
-    if (Number.isNaN(target)) continue;
-
-    const warnAt = target - 10 * 60 * 1000;
-    if (warnAt > now + 5_000) {
-      await chrome.alarms.create(alarmName(p.id, "warn"), { when: warnAt });
-    }
-    if (target > now + 5_000) {
-      await chrome.alarms.create(alarmName(p.id, "fire"), { when: target });
-    }
-  }
-}
-
-async function refreshAndSchedule() {
-  const token = await getToken();
-  if (!token) {
-    await clearAllPostAlarms();
-    return;
-  }
-  try {
-    const { posts } = await fetchPosts(token);
-    await chrome.storage.local.set({ lastPosts: posts, lastFetch: Date.now() });
-    await scheduleAlarmsForPosts(posts);
-  } catch (e) {
-    console.error("PostFlow refresh failed:", e);
-  }
+function notifKey(postId, kind, iso) {
+  return `${postId}:${kind}:${dayKey(iso)}`;
 }
 
 async function alreadyNotified(key) {
@@ -73,7 +45,7 @@ async function alreadyNotified(key) {
 async function markNotified(key) {
   const { notifiedKeys = {} } = await chrome.storage.local.get("notifiedKeys");
   notifiedKeys[key] = Date.now();
-  // garbage collect entries older than 36h
+  // GC: remove entradas com mais de 36h
   const cutoff = Date.now() - 36 * 60 * 60 * 1000;
   for (const k of Object.keys(notifiedKeys)) {
     if (notifiedKeys[k] < cutoff) delete notifiedKeys[k];
@@ -81,9 +53,22 @@ async function markNotified(key) {
   await chrome.storage.local.set({ notifiedKeys });
 }
 
-async function showNotification(post, kind) {
-  const dateIso = new Date(post.scheduled_at).toISOString().slice(0, 10);
-  const key = notifKey(post.id, kind, dateIso);
+async function showAuthErrorNotification() {
+  const key = "auth-error";
+  if (await alreadyNotified(key)) return;
+  await chrome.notifications.create("pf-auth-error", {
+    type: "basic",
+    iconUrl: "icon.png",
+    title: "PostFlow — Token inválido",
+    message: "Token inválido ou expirado. Reconecte sua extensão.",
+    priority: 2,
+    requireInteraction: true,
+  });
+  await markNotified(key);
+}
+
+async function showPostNotification(post, kind) {
+  const key = notifKey(post.id, kind, post.scheduled_at);
   if (await alreadyNotified(key)) return;
 
   const time = new Date(post.scheduled_at).toLocaleTimeString("pt-BR", {
@@ -97,7 +82,8 @@ async function showNotification(post, kind) {
       ? `"${post.title}" às ${time}${ws}`
       : `"${post.title}" — agendado para ${time}${ws}`;
 
-  await chrome.notifications.create(`pf-${key}`, {
+  const notifId = `pf:${post.workspace_id}:${dayKey(post.scheduled_at)}:${post.id}:${kind}`;
+  await chrome.notifications.create(notifId, {
     type: "basic",
     iconUrl: "icon.png",
     title,
@@ -108,46 +94,118 @@ async function showNotification(post, kind) {
   await markNotified(key);
 }
 
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === POLL_ALARM) {
-    await refreshAndSchedule();
-    return;
-  }
-  if (alarm.name.startsWith("post:")) {
-    const [, postId, kind] = alarm.name.split(":");
-    const { lastPosts = [] } = await chrome.storage.local.get("lastPosts");
-    const post = lastPosts.find((p) => p.id === postId);
-    if (post) await showNotification(post, kind);
-  }
-});
+function checkWindows(post, nowMs) {
+  if (!post.scheduled_at) return [];
+  if (post.status === "posted" || post.status === "skipped") return [];
+  const target = new Date(post.scheduled_at).getTime();
+  if (Number.isNaN(target)) return [];
+  const diffMin = (target - nowMs) / 60_000; // positivo = futuro
 
-chrome.notifications.onClicked.addListener((id) => {
-  chrome.tabs.create({ url: "https://vibe-queue-up.lovable.app/" });
-  chrome.notifications.clear(id);
+  const fires = [];
+  // Aviso: entre 9 e 10 minutos antes
+  if (diffMin > 9 && diffMin <= 10) fires.push("warn");
+  // Hora exata: entre 0 e 1 minuto após
+  if (diffMin > -1 && diffMin <= 0) fires.push("fire");
+  return fires;
+}
+
+async function runCycle() {
+  if (runLock) return;
+  runLock = true;
+  try {
+    const token = await getToken();
+    if (!token) return;
+
+    let res;
+    try {
+      res = await fetchPosts(token);
+    } catch (e) {
+      // Erro de rede — silencioso, tenta no próximo ciclo
+      console.warn("PostFlow: fetch failed", e);
+      return;
+    }
+
+    if (res.status === 401) {
+      await showAuthErrorNotification();
+      // Mantém o token salvo para o usuário ver/editar; status fica visível no popup
+      await chrome.storage.local.set({ authError: true, lastFetch: Date.now() });
+      return;
+    }
+    if (!res.ok) {
+      console.warn("PostFlow: HTTP", res.status);
+      return;
+    }
+
+    let payload;
+    try {
+      payload = await res.json();
+    } catch {
+      return;
+    }
+    const posts = Array.isArray(payload?.posts) ? payload.posts : [];
+    await chrome.storage.local.set({
+      lastPosts: posts,
+      lastFetch: Date.now(),
+      authError: false,
+    });
+
+    const now = Date.now();
+    for (const p of posts) {
+      const kinds = checkWindows(p, now);
+      for (const kind of kinds) {
+        await showPostNotification(p, kind);
+      }
+    }
+  } finally {
+    runLock = false;
+  }
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === POLL_ALARM) runCycle();
 });
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg && msg.type === "RESCHEDULE_ALARMS") {
-    refreshAndSchedule().then(() => sendResponse({ ok: true }));
+  if (msg && msg.type === "RUN_NOW") {
+    runCycle().then(() => sendResponse({ ok: true }));
     return true;
   }
+  if (msg && msg.type === "CLEAR_TOKEN") {
+    clearToken().then(() => sendResponse({ ok: true }));
+    return true;
+  }
+});
+
+chrome.notifications.onClicked.addListener(async (id) => {
+  // id format: "pf:<workspaceId>:<YYYY-MM-DD>:<postId>:<kind>"  ou "pf-auth-error"
+  let url = APP_ORIGIN + "/";
+  if (id.startsWith("pf:")) {
+    const parts = id.split(":");
+    const workspaceId = parts[1];
+    const date = parts[2];
+    if (workspaceId && date) {
+      url = `${APP_ORIGIN}/w/${workspaceId}/day/${date}`;
+    }
+  }
+  chrome.tabs.create({ url });
+  chrome.notifications.clear(id);
 });
 
 async function ensurePollAlarm() {
   const existing = await chrome.alarms.get(POLL_ALARM);
   if (!existing) {
     await chrome.alarms.create(POLL_ALARM, {
-      delayInMinutes: 0.5,
-      periodInMinutes: POLL_MIN,
+      delayInMinutes: 0.1,
+      periodInMinutes: POLL_PERIOD_MIN,
     });
   }
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
   await ensurePollAlarm();
-  await refreshAndSchedule();
+  await runCycle();
 });
 chrome.runtime.onStartup.addListener(async () => {
   await ensurePollAlarm();
-  await refreshAndSchedule();
+  await runCycle();
 });

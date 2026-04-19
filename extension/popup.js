@@ -6,34 +6,32 @@ async function getToken() {
   const { token } = await chrome.storage.local.get("token");
   return token || null;
 }
-
 async function saveToken(token) {
-  await chrome.storage.local.set({ token });
+  await chrome.storage.local.set({ token, authError: false });
 }
-
-async function clearToken() {
-  await chrome.storage.local.remove(["token", "lastPosts", "notifiedKeys"]);
+async function clearAll() {
+  await chrome.storage.local.remove(["token", "lastPosts", "authError", "lastFetch"]);
 }
 
 function fmtTime(iso) {
   try {
-    return new Date(iso).toLocaleTimeString("pt-BR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
+    return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  } catch { return iso; }
+}
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[c]);
 }
 
 async function fetchPosts(token) {
   const tzOffsetMinutes = new Date().getTimezoneOffset();
-  const url = `${API_URL}?tzOffsetMinutes=${tzOffsetMinutes}`;
-  const res = await fetch(url, {
+  const res = await fetch(`${API_URL}?tzOffsetMinutes=${tzOffsetMinutes}`, {
     headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
   });
-  if (res.status === 401) throw new Error("Token inválido ou revogado");
-  if (!res.ok) throw new Error(`Erro ${res.status}`);
+  if (res.status === 401) throw new Error("AUTH");
+  if (!res.ok) throw new Error("HTTP " + res.status);
   return res.json();
 }
 
@@ -43,21 +41,16 @@ function renderPosts(posts) {
     el.innerHTML = '<div class="empty">Nenhum post agendado para hoje</div>';
     return;
   }
+  const now = Date.now();
+  // marca o próximo ainda futuro
+  const nextIdx = posts.findIndex((p) => new Date(p.scheduled_at).getTime() > now);
   el.innerHTML = posts
-    .map(
-      (p) => `
-      <div class="post">
+    .map((p, i) => `
+      <div class="post${i === nextIdx ? " next" : ""}">
         <div class="t">${escapeHtml(p.title)}</div>
-        <div class="m">${fmtTime(p.scheduled_at)} · ${escapeHtml(p.workspace_name || "")} · ${p.status}</div>
-      </div>`,
-    )
+        <div class="m">${fmtTime(p.scheduled_at)} · ${escapeHtml(p.workspace_name || "")} · ${escapeHtml(p.status)}</div>
+      </div>`)
     .join("");
-}
-
-function escapeHtml(s) {
-  return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  })[c]);
 }
 
 function setStatus(text, kind = "") {
@@ -66,28 +59,37 @@ function setStatus(text, kind = "") {
   s.className = "status" + (kind ? " " + kind : "");
 }
 
+function showSetup() {
+  $("setup").style.display = "block";
+  $("connected").style.display = "none";
+  $("setup-status").style.display = "none";
+  $("token").value = "";
+}
+function showConnected() {
+  $("setup").style.display = "none";
+  $("connected").style.display = "block";
+}
+
 async function refresh() {
   const token = await getToken();
   if (!token) return showSetup();
   setStatus("Atualizando...");
   try {
     const { posts } = await fetchPosts(token);
-    await chrome.storage.local.set({ lastPosts: posts, lastFetch: Date.now() });
+    await chrome.storage.local.set({ lastPosts: posts, lastFetch: Date.now(), authError: false });
     renderPosts(posts);
-    setStatus(`${posts.length} post(s) hoje · atualizado ${new Date().toLocaleTimeString("pt-BR")}`, "ok");
-    chrome.runtime.sendMessage({ type: "RESCHEDULE_ALARMS" }).catch(() => {});
+    setStatus(`${posts.length} post(s) hoje · ${new Date().toLocaleTimeString("pt-BR")}`, "ok");
+    chrome.runtime.sendMessage({ type: "RUN_NOW" }).catch(() => {});
   } catch (e) {
-    setStatus(e.message || "Erro", "err");
+    if (e.message === "AUTH") {
+      setStatus("Token inválido ou expirado. Edite o token.", "err");
+    } else {
+      setStatus("Sem conexão — tentaremos novamente em 1 min", "err");
+      // mostra cache
+      const { lastPosts = [] } = await chrome.storage.local.get("lastPosts");
+      renderPosts(lastPosts);
+    }
   }
-}
-
-function showSetup() {
-  $("setup").style.display = "block";
-  $("connected").style.display = "none";
-}
-function showConnected() {
-  $("setup").style.display = "none";
-  $("connected").style.display = "block";
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -105,8 +107,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     s.style.display = "block";
     s.className = "status";
     s.textContent = "Validando...";
+    if (t.length < 16) {
+      s.className = "status err";
+      s.textContent = "Token muito curto";
+      return;
+    }
     try {
-      // validate by hitting the API
       const tzOffsetMinutes = new Date().getTimezoneOffset();
       const res = await fetch(`${API_URL}?tzOffsetMinutes=${tzOffsetMinutes}`, {
         headers: { Authorization: `Bearer ${t}` },
@@ -115,7 +121,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!res.ok) throw new Error("Erro " + res.status);
       await saveToken(t);
       s.className = "status ok";
-      s.textContent = "Conectado!";
+      s.textContent = "Token salvo com sucesso";
       setTimeout(() => {
         showConnected();
         refresh();
@@ -127,9 +133,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   $("refresh").addEventListener("click", refresh);
+  $("edit").addEventListener("click", async () => {
+    const current = await getToken();
+    showSetup();
+    if (current) $("token").value = current;
+  });
   $("disconnect").addEventListener("click", async () => {
-    await clearToken();
-    chrome.runtime.sendMessage({ type: "RESCHEDULE_ALARMS" }).catch(() => {});
+    if (!confirm("Desconectar a extensão?")) return;
+    await clearAll();
+    chrome.runtime.sendMessage({ type: "CLEAR_TOKEN" }).catch(() => {});
     showSetup();
   });
 });
