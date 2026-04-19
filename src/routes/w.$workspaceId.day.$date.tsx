@@ -109,7 +109,7 @@ function DayList({
     const { data, error } = await supabase
       .from("videos")
       .select(
-        "id, workspace_id, video_url, storage_path, caption, base_text, hashtags, status, queue_position, scheduled_at, posted_at, uploaded_by, pinned, created_at",
+        "id, workspace_id, video_url, storage_path, caption, base_text, hashtags, yt_title, yt_description, status, queue_position, scheduled_at, posted_at, uploaded_by, pinned, created_at",
       )
       .eq("workspace_id", workspaceId)
       .gte("scheduled_at", start.toISOString())
@@ -383,13 +383,10 @@ function VideoCard({
             </span>
           )}
         </div>
-        <a
-          href={playbackUrl}
-          download
-          className="flex items-center gap-1 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <Download className="h-3.5 w-3.5" /> Baixar
-        </a>
+        <DownloadVideoButton
+          storagePath={video.storage_path}
+          fileName={video.storage_path.split("/").pop() ?? "video.mp4"}
+        />
       </div>
 
       <video
@@ -401,8 +398,13 @@ function VideoCard({
       />
 
       <div className="space-y-4 p-4">
-        {(baseText || video.hashtags) && (
-          <PlatformCaptions baseText={baseText} hashtags={video.hashtags} />
+        {(baseText || video.hashtags || video.yt_title || video.yt_description) && (
+          <PlatformCaptions
+            baseText={baseText}
+            hashtags={video.hashtags}
+            ytTitle={video.yt_title}
+            ytDescription={video.yt_description}
+          />
         )}
 
         {video.status === "pending" && (
@@ -615,3 +617,59 @@ function MoveVideoButton({
     </Popover>
   );
 }
+
+/**
+ * Botão de download que pede uma signed URL fresca a cada clique (1h).
+ * Usa <a download> programático para forçar download mesmo em mobile.
+ */
+function DownloadVideoButton({
+  storagePath,
+  fileName,
+}: {
+  storagePath: string;
+  fileName: string;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  async function handleDownload() {
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.storage
+        .from("videos")
+        .createSignedUrl(storagePath, 3600, { download: fileName });
+      if (error || !data?.signedUrl) {
+        throw error ?? new Error("URL não disponível");
+      }
+      // Em mobile, abrir em nova aba é mais confiável que <a download>.
+      const a = document.createElement("a");
+      a.href = data.signedUrl;
+      a.download = fileName;
+      a.target = "_blank";
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao baixar");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleDownload}
+      disabled={busy}
+      className="flex items-center gap-1 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-60"
+    >
+      {busy ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <Download className="h-3.5 w-3.5" />
+      )}{" "}
+      Baixar
+    </button>
+  );
+}
+

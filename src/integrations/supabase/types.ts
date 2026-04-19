@@ -73,6 +73,8 @@ export type Database = {
           uploaded_by: string | null
           video_url: string
           workspace_id: string
+          yt_description: string
+          yt_title: string
         }
         Insert: {
           base_text?: string
@@ -90,6 +92,8 @@ export type Database = {
           uploaded_by?: string | null
           video_url: string
           workspace_id: string
+          yt_description?: string
+          yt_title?: string
         }
         Update: {
           base_text?: string
@@ -107,6 +111,8 @@ export type Database = {
           uploaded_by?: string | null
           video_url?: string
           workspace_id?: string
+          yt_description?: string
+          yt_title?: string
         }
         Relationships: [
           {

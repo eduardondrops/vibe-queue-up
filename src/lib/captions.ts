@@ -7,11 +7,12 @@ export const PLATFORMS: { id: Platform; label: string }[] = [
   { id: "facebook", label: "Facebook" },
 ];
 
+/** CTAs completos por plataforma — frases inteiras, sem substituição quebrada. */
 const CTA: Record<Platform, string> = {
-  instagram: "Segue o perfil pra mais conteúdo como esse 💜",
-  tiktok: "Segue o perfil pra não perder nenhum vídeo 🔥",
-  youtube: "Se inscreva no canal e ative o sininho 🔔",
-  facebook: "Siga a página pra ver mais como esse 👍",
+  instagram: "Siga o perfil para mais conteúdos como este.",
+  tiktok: "Siga o perfil para mais conteúdos como este.",
+  youtube: "Se inscreva no canal para mais conteúdos como este.",
+  facebook: "Siga a página para acompanhar mais conteúdos como este.",
 };
 
 const PLATFORM_TAGS: Record<Platform, string[]> = {
@@ -22,9 +23,8 @@ const PLATFORM_TAGS: Record<Platform, string[]> = {
 };
 
 /** Merge user hashtags + platform-specific defaults, deduplicated, max 30. */
-function mergeHashtags(userTags: string, platform: Platform): string {
-  const normalize = (t: string) =>
-    t.trim().replace(/^#+/, "").toLowerCase();
+export function mergeHashtags(userTags: string, platform: Platform): string {
+  const normalize = (t: string) => t.trim().replace(/^#+/, "").toLowerCase();
 
   const userList = (userTags || "")
     .split(/[\s,]+/)
@@ -44,9 +44,14 @@ function mergeHashtags(userTags: string, platform: Platform): string {
   return merged.slice(0, 30).join(" ");
 }
 
+/** CTA completo por plataforma (frase inteira). */
+export function getCTA(platform: Platform): string {
+  return CTA[platform];
+}
+
 /**
- * Build a ready-to-paste caption for a given platform using the video's
- * baseText (caption) and hashtags as the source of truth.
+ * Build a ready-to-paste caption for a given platform.
+ * Para YouTube, use buildYouTube em vez disso para ter título separado.
  */
 export function generateCaption(
   platform: Platform,
@@ -58,4 +63,35 @@ export function generateCaption(
   const tags = mergeHashtags(hashtags, platform);
 
   return [body, cta, tags].filter(Boolean).join("\n\n");
+}
+
+/**
+ * Estrutura específica do YouTube: título, descrição e hashtags separados.
+ * - title: usa ytTitle se existir, senão primeira linha do baseText (até 100 char)
+ * - description: ytDescription se existir, senão baseText + CTA
+ * - hashtags: merged com defaults do YouTube
+ */
+export function buildYouTube(args: {
+  baseText: string;
+  hashtags: string;
+  ytTitle?: string;
+  ytDescription?: string;
+}): { title: string; description: string; hashtags: string } {
+  const baseText = (args.baseText || "").trim();
+  const cta = CTA.youtube;
+
+  let title = (args.ytTitle || "").trim();
+  if (!title) {
+    const firstLine = baseText.split("\n")[0]?.trim() ?? "";
+    title = firstLine.slice(0, 100);
+  }
+
+  let description = (args.ytDescription || "").trim();
+  if (!description) {
+    description = [baseText, cta].filter(Boolean).join("\n\n");
+  }
+
+  const hashtags = mergeHashtags(args.hashtags, "youtube");
+
+  return { title, description, hashtags };
 }

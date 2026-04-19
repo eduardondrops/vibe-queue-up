@@ -5,7 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { dayKey, slotLabelForDate } from "@/lib/scheduling";
-import { autoDeleteOldPosted } from "@/lib/queue";
+import { autoDeleteOldPosted, autoSkipOverdue } from "@/lib/queue";
 import { getMyRole, getWorkspace, type Workspace } from "@/lib/workspaces";
 import { ChevronLeft, ChevronRight, UserPlus } from "lucide-react";
 import { InviteMemberDialog } from "@/components/InviteMemberDialog";
@@ -55,6 +55,8 @@ function WorkspaceCalendarPage() {
         if (!w) {
           navigate({ to: "/" });
         } else {
+          // Fila inteligente: ao abrir o app, processa overdue e limpa antigos.
+          autoSkipOverdue(workspaceId).catch(() => {});
           autoDeleteOldPosted(workspaceId).catch(() => {});
         }
       }
@@ -273,28 +275,19 @@ function Calendar({
               </span>
               {hasItems && (
                 <div className="mt-auto flex w-full flex-col items-center gap-0.5">
-                  <div className="flex items-center gap-1">
-                    <span
-                      className={`inline-block h-1.5 w-1.5 rounded-full ${
-                        isToday
-                          ? "bg-success-foreground"
-                          : isPast && inMonth
-                            ? "bg-muted-foreground"
-                            : "grad-bg"
-                      }`}
-                    />
-                    <span
-                      className={`text-[10px] font-semibold ${
-                        isToday
-                          ? "text-success-foreground"
-                          : isPast && inMonth
-                            ? "text-muted-foreground"
-                            : "text-foreground"
-                      }`}
-                    >
-                      {summary.total}
-                    </span>
-                  </div>
+                  <span
+                    className={`inline-flex min-w-[1.5rem] items-center justify-center rounded-md px-1.5 py-0.5 font-display text-sm font-bold leading-none ${
+                      isToday
+                        ? "bg-success-foreground/20 text-success-foreground"
+                        : isPast && inMonth
+                          ? "bg-muted-foreground/15 text-muted-foreground"
+                          : summary.total >= 3
+                            ? "grad-bg text-primary-foreground shadow-[0_4px_12px_-4px_oklch(0.68_0.26_358/0.5)]"
+                            : "bg-primary/15 text-primary"
+                    }`}
+                  >
+                    {summary.total}
+                  </span>
                   {summary.pending > 0 && !isPast && !isToday && (
                     <span className="text-[9px] text-muted-foreground">
                       {summary.pending} pend.
