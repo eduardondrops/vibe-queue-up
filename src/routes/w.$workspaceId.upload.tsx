@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,7 +16,8 @@ import {
   spWallToUtc,
   todayKey,
 } from "@/lib/scheduling";
-import { Upload, Film, Loader2, CalendarClock } from "lucide-react";
+import { VideoPreview } from "@/components/VideoPreview";
+import { Upload, Loader2, CalendarClock, ChevronDown, Youtube } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/w/$workspaceId/upload")({
@@ -69,21 +71,23 @@ function UploadPage() {
   );
 }
 
-type SlotChoice = "auto" | string; // "auto" or ISO of slot
+type SlotChoice = "auto" | string;
 
 function UploadForm({ workspaceId }: { workspaceId: string }) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [baseText, setBaseText] = useState("");
   const [hashtags, setHashtags] = useState("");
+  const [ytTitle, setYtTitle] = useState("");
+  const [ytDescription, setYtDescription] = useState("");
+  const [ytOpen, setYtOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [progressLabel, setProgressLabel] = useState("");
 
-  // Date picker (SP day key, e.g. "2026-04-19")
   const [dayChoice, setDayChoice] = useState<string>(todayKey());
   const [slotChoice, setSlotChoice] = useState<SlotChoice>("auto");
   const [takenKeys, setTakenKeys] = useState<Set<string>>(new Set());
 
-  // Build day options: today + next 30 days.
   const dayOptions = useMemo(() => {
     const today = new Date();
     const out: Array<{ key: string; label: string }> = [];
@@ -101,7 +105,6 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
     return out;
   }, []);
 
-  // Reload taken slots whenever day changes.
   useEffect(() => {
     let cancel = false;
     (async () => {
@@ -121,7 +124,6 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
         if (v.scheduled_at) set.add(slotKey(v.scheduled_at));
       });
       setTakenKeys(set);
-      // Reset slot if previously selected slot is now taken.
       setSlotChoice("auto");
     })();
     return () => {
@@ -129,7 +131,6 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
     };
   }, [dayChoice, workspaceId]);
 
-  // Slot options for the selected day.
   const slotOptions = useMemo(() => {
     const [y, m, d] = dayChoice.split("-").map(Number);
     const now = new Date();
@@ -147,14 +148,28 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
     });
   }, [dayChoice, takenKeys]);
 
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    if (f && f.size > 200 * 1024 * 1024) {
+      toast.error("Arquivo maior que 200MB");
+      return;
+    }
+    setFile(f);
+  }
+
+  function triggerFileInput() {
+    fileInputRef.current?.click();
+  }
+
+  function removeFile() {
+    setFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!file) {
       toast.error("Selecione um vídeo");
-      return;
-    }
-    if (file.size > 200 * 1024 * 1024) {
-      toast.error("Arquivo maior que 200MB");
       return;
     }
 
@@ -179,6 +194,8 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
         storagePath: path,
         baseText: baseText.trim(),
         hashtags: hashtags.trim(),
+        ytTitle: ytTitle.trim(),
+        ytDescription: ytDescription.trim(),
         pinnedAt,
       });
 
@@ -188,9 +205,10 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
       setFile(null);
       setBaseText("");
       setHashtags("");
+      setYtTitle("");
+      setYtDescription("");
       setSlotChoice("auto");
-      const input = document.getElementById("video-file") as HTMLInputElement | null;
-      if (input) input.value = "";
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao enviar");
     } finally {
@@ -218,33 +236,31 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
         className="glass space-y-5 rounded-2xl p-5 shadow-[var(--shadow-card)]"
       >
         <div className="space-y-2">
-          <Label htmlFor="video-file">Vídeo (MP4)</Label>
-          <label
-            htmlFor="video-file"
-            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-surface px-4 py-8 text-center transition-colors hover:border-primary/60"
-          >
-            {file ? (
-              <>
-                <Film className="h-8 w-8 text-primary" />
-                <div className="text-sm font-medium">{file.name}</div>
-                <div className="text-xs text-muted-foreground">
-                  {(file.size / 1024 / 1024).toFixed(1)} MB
-                </div>
-              </>
-            ) : (
-              <>
-                <Upload className="h-8 w-8 text-muted-foreground" />
-                <div className="text-sm font-medium">Toque para escolher</div>
-                <div className="text-xs text-muted-foreground">MP4, até 200MB</div>
-              </>
-            )}
-          </label>
+          <Label>Vídeo (MP4)</Label>
+          {file ? (
+            <VideoPreview
+              file={file}
+              onRemove={removeFile}
+              onReplace={triggerFileInput}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={triggerFileInput}
+              className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-surface px-4 py-10 text-center transition-colors hover:border-primary/60"
+            >
+              <Upload className="h-8 w-8 text-muted-foreground" />
+              <div className="text-sm font-medium">Toque para escolher</div>
+              <div className="text-xs text-muted-foreground">MP4, até 200MB</div>
+            </button>
+          )}
           <input
+            ref={fileInputRef}
             id="video-file"
             type="file"
             accept="video/mp4,video/*"
             className="hidden"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            onChange={handleFileChange}
           />
         </div>
 
@@ -328,6 +344,57 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
             placeholder="#viral #fyp"
             maxLength={500}
           />
+        </div>
+
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setYtOpen((v) => !v)}
+            className="flex w-full items-center justify-between rounded-xl border border-border bg-surface px-3 py-2.5 text-left text-sm font-semibold text-foreground transition-colors hover:border-primary/60"
+          >
+            <span className="flex items-center gap-2">
+              <Youtube className="h-4 w-4 text-[oklch(0.65_0.22_25)]" />
+              YouTube — título e descrição
+              <span className="text-[10px] font-normal text-muted-foreground">
+                (opcional)
+              </span>
+            </span>
+            <ChevronDown
+              className={`h-4 w-4 text-muted-foreground transition-transform ${ytOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+          {ytOpen && (
+            <div className="space-y-3 rounded-xl border border-border bg-surface/50 p-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="ytTitle" className="text-xs">
+                  Título do YouTube
+                </Label>
+                <Input
+                  id="ytTitle"
+                  value={ytTitle}
+                  onChange={(e) => setYtTitle(e.target.value)}
+                  placeholder="Se vazio, usa a primeira linha do texto base"
+                  maxLength={100}
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  {ytTitle.length}/100
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ytDescription" className="text-xs">
+                  Descrição do YouTube
+                </Label>
+                <Textarea
+                  id="ytDescription"
+                  value={ytDescription}
+                  onChange={(e) => setYtDescription(e.target.value)}
+                  rows={3}
+                  placeholder="Se vazio, usa o texto base + CTA"
+                  maxLength={5000}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <Button
