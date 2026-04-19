@@ -20,6 +20,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { PlatformCaptions } from "@/components/PlatformCaptions";
+import { EditPostDialog } from "@/components/EditPostDialog";
 import {
   ChevronLeft,
   ChevronDown,
@@ -31,6 +32,7 @@ import {
   Pin,
   PinOff,
   Plus,
+  Pencil,
   CircleDashed,
   CheckCircle2,
   SkipForward as SkipIcon,
@@ -101,6 +103,7 @@ function DayList({
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const isPast = dKey < todayKey();
   const isToday = dKey === todayKey();
@@ -288,6 +291,7 @@ function DayList({
                   onSkip={() => handleSkip(video.id)}
                   onMove={(targetIso) => handleMove(video.id, targetIso)}
                   onTogglePin={() => handleTogglePin(video.id, video.pinned)}
+                  onEdit={() => setEditingId(video.id)}
                   workspaceId={workspaceId}
                 />
               );
@@ -308,6 +312,18 @@ function DayList({
           })}
         </div>
       )}
+
+      <EditPostDialog
+        open={editingId !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditingId(null);
+        }}
+        post={videos.find((v) => v.id === editingId) ?? null}
+        onSaved={() => {
+          setEditingId(null);
+          void load();
+        }}
+      />
     </div>
   );
 }
@@ -374,6 +390,7 @@ function VideoSlotItem({
   onSkip,
   onMove,
   onTogglePin,
+  onEdit,
 }: {
   video: QueueVideo;
   expanded: boolean;
@@ -386,6 +403,7 @@ function VideoSlotItem({
   onSkip: () => void;
   onMove: (targetIso: string) => void;
   onTogglePin: () => void;
+  onEdit: () => void;
 }) {
   const time = video.scheduled_at ? slotLabelForDate(video.scheduled_at) : "--:--";
   const baseText = video.base_text || video.caption;
@@ -461,6 +479,15 @@ function VideoSlotItem({
       {expanded && (
         <div className="border-t border-border">
           <div className="flex items-center justify-end gap-2 px-4 py-2">
+            {canEdit && (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="flex items-center gap-1 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <Pencil className="h-3.5 w-3.5" /> Editar
+              </button>
+            )}
             <DownloadVideoButton
               storagePath={video.storage_path}
               fileName={video.storage_path.split("/").pop() ?? "video.mp4"}
