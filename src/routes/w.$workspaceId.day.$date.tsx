@@ -26,6 +26,7 @@ import {
   ChevronLeft,
   ChevronDown,
   Download,
+  DownloadCloud,
   Check,
   SkipForward,
   Loader2,
