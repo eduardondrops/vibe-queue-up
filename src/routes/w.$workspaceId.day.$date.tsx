@@ -312,6 +312,18 @@ function DayList({
           })}
         </div>
       )}
+
+      <EditPostDialog
+        open={editingId !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditingId(null);
+        }}
+        post={videos.find((v) => v.id === editingId) ?? null}
+        onSaved={() => {
+          setEditingId(null);
+          void load();
+        }}
+      />
     </div>
   );
 }
