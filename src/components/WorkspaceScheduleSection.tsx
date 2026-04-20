@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Loader2, Plus, Trash2, Clock } from "lucide-react";
+import { Loader2, Plus, Trash2, Clock, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,16 @@ import {
 import { recomputeQueue } from "@/lib/queue";
 
 const TIME_RE = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+
+const WEEKDAYS = [
+  { value: 0, label: "D", full: "Domingo" },
+  { value: 1, label: "S", full: "Segunda" },
+  { value: 2, label: "T", full: "Terça" },
+  { value: 3, label: "Q", full: "Quarta" },
+  { value: 4, label: "Q", full: "Quinta" },
+  { value: 5, label: "S", full: "Sexta" },
+  { value: 6, label: "S", full: "Sábado" },
+];
 
 function normalizeTime(input: string): string | null {
   const trimmed = input.trim();
@@ -27,6 +37,7 @@ export function WorkspaceScheduleSection({
   canEdit: boolean;
 }) {
   const [slots, setSlots] = useState<string[]>([]);
+  const [activeDays, setActiveDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState("");
@@ -36,7 +47,10 @@ export function WorkspaceScheduleSection({
     setLoading(true);
     getWorkspaceSchedule(workspaceId)
       .then((s) => {
-        if (!cancel) setSlots(s.slots);
+        if (!cancel) {
+          setSlots(s.slots);
+          setActiveDays(s.active_weekdays);
+        }
       })
       .finally(() => !cancel && setLoading(false));
     return () => {
@@ -65,6 +79,13 @@ export function WorkspaceScheduleSection({
     setSlots((curr) => curr.filter((x) => x !== s));
   }
 
+  function toggleDay(day: number) {
+    if (!canEdit) return;
+    setActiveDays((curr) =>
+      curr.includes(day) ? curr.filter((d) => d !== day) : [...curr, day].sort(),
+    );
+  }
+
   async function handleSave(e: FormEvent) {
     e.preventDefault();
     if (!canEdit) return;
@@ -72,9 +93,13 @@ export function WorkspaceScheduleSection({
       toast.error("Adicione pelo menos um horário");
       return;
     }
+    if (activeDays.length === 0) {
+      toast.error("Selecione pelo menos um dia ativo");
+      return;
+    }
     setSaving(true);
     try {
-      await updateWorkspaceSlots(workspaceId, slots);
+      await updateWorkspaceSlots(workspaceId, slots, activeDays);
       // Recompute the queue immediately so existing pending videos get
       // redistributed across the new slot set.
       await recomputeQueue(workspaceId);
@@ -98,7 +123,7 @@ export function WorkspaceScheduleSection({
 
       <form
         onSubmit={handleSave}
-        className="glass space-y-4 rounded-2xl p-5 shadow-[var(--shadow-card)]"
+        className="glass space-y-5 rounded-2xl p-5 shadow-[var(--shadow-card)]"
       >
         {loading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -164,10 +189,43 @@ export function WorkspaceScheduleSection({
               </div>
             )}
 
+            <div className="border-t border-border/50 pt-4">
+              <Label className="mb-2 flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
+                <CalendarDays className="h-3.5 w-3.5" />
+                Dias ativos ({activeDays.length}/7)
+              </Label>
+              <div className="flex flex-wrap gap-1.5">
+                {WEEKDAYS.map((d) => {
+                  const active = activeDays.includes(d.value);
+                  return (
+                    <button
+                      key={d.value}
+                      type="button"
+                      onClick={() => toggleDay(d.value)}
+                      disabled={!canEdit}
+                      title={d.full}
+                      aria-pressed={active}
+                      className={`h-9 w-9 rounded-lg border text-sm font-bold transition-all ${
+                        active
+                          ? "border-primary/60 bg-primary/15 text-primary shadow-[0_0_0_2px_oklch(0.68_0.26_358/0.15)]"
+                          : "border-border bg-surface text-muted-foreground hover:border-border/80"
+                      } ${!canEdit ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+                    >
+                      {d.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+                Usado apenas para calcular a saúde da sua frequência de postagem.
+                Não afeta o agendamento automático dos vídeos.
+              </p>
+            </div>
+
             {canEdit && (
               <Button
                 type="submit"
-                disabled={saving || slots.length === 0}
+                disabled={saving || slots.length === 0 || activeDays.length === 0}
                 className="w-full grad-bg text-primary-foreground hover:opacity-90"
               >
                 {saving ? (
