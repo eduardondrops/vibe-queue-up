@@ -121,7 +121,15 @@ export const Route = createFileRoute("/api/extension/posts-today")({
             };
           });
 
-          return jsonResponse({ posts });
+          // Compute posting health per workspace (server-side).
+          const workspacesHealth = await Promise.all(
+            wsIds.map(async (wid) => {
+              const h = await computeHealthForWorkspace(wid);
+              return { id: wid, name: wsMap.get(wid) ?? "", ...h };
+            }),
+          );
+
+          return jsonResponse({ posts, workspaces: workspacesHealth });
         } catch (err) {
           console.error("posts-today error:", err);
           return jsonResponse({ error: "Internal error" }, 500);
