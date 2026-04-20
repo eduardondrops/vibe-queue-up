@@ -8,6 +8,8 @@ const corsHeaders = {
   "Access-Control-Max-Age": "86400",
 };
 
+const TZ = "America/Sao_Paulo";
+
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
   const hash = await crypto.subtle.digest("SHA-256", data);
@@ -22,6 +24,153 @@ function jsonResponse(body: unknown, status = 200) {
     headers: { "Content-Type": "application/json", ...corsHeaders },
   });
 }
+
+function spDayKey(d: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
+function spWeekday(d: Date): number {
+  const fmt = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short" });
+  const map: Record<string, number> = {
+    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+  };
+  return map[fmt.format(d)] ?? 0;
+}
+
+type WsHealth = {
+  status: "excellent" | "good" | "warning";
+  message: string;
+  daysSinceLastPost: number | null;
+  postedLast7: number;
+  expectedLast7: number;
+  scheduledNext7: number;
+  expectedNext7: number;
+};
+
+async function computeHealthForWorkspace(workspaceId: string): Promise<WsHealth> {
+  const { data: sched } = await supabaseAdmin
+    .from("workspace_schedule")
+    .select("slots, active_weekdays")
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  const slots = sched?.slots ?? ["10:00", "18:30", "21:00"];
+  const activeWeekdays =
+    sched?.active_weekdays && sched.active_weekdays.length > 0
+      ? sched.active_weekdays
+      : [0, 1, 2, 3, 4, 5, 6];
+  const slotsPerDay = slots.length || 1;
+
+  const now = new Date();
+  const pastKeys = new Set<string>();
+  let pastCount = 0;
+  for (let i = 7; i >= 1; i--) {
+    const d = new Date(now.getTime() - i * 86400000);
+    if (activeWeekdays.includes(spWeekday(d))) {
+      pastKeys.add(spDayKey(d));
+      pastCount++;
+    }
+  }
+  const futureKeys = new Set<string>();
+  let futureCount = 0;
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date(now.getTime() + i * 86400000);
+    if (activeWeekdays.includes(spWeekday(d))) {
+      futureKeys.add(spDayKey(d));
+      futureCount++;
+    }
+  }
+
+  const sevenAgo = new Date(now.getTime() - 8 * 86400000).toISOString();
+  const sevenAhead = new Date(now.getTime() + 8 * 86400000).toISOString();
+  const [postedRes, pendingRes, lastPostRes] = await Promise.all([
+    supabaseAdmin
+      .from("videos")
+      .select("posted_at")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "posted")
+      .gte("posted_at", sevenAgo),
+    supabaseAdmin
+      .from("videos")
+      .select("scheduled_at")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "pending")
+      .not("scheduled_at", "is", null)
+      .gte("scheduled_at", now.toISOString())
+      .lte("scheduled_at", sevenAhead),
+    supabaseAdmin
+      .from("videos")
+      .select("posted_at")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "posted")
+      .not("posted_at", "is", null)
+      .order("posted_at", { ascending: false })
+      .limit(1),
+  ]);
+
+  let postedLast7 = 0;
+  for (const r of postedRes.data ?? []) {
+    if (r.posted_at && pastKeys.has(spDayKey(new Date(r.posted_at)))) postedLast7++;
+  }
+  let scheduledNext7 = 0;
+  for (const r of pendingRes.data ?? []) {
+    if (r.scheduled_at && futureKeys.has(spDayKey(new Date(r.scheduled_at)))) scheduledNext7++;
+  }
+
+  const expectedLast7 = pastCount * slotsPerDay;
+  const expectedNext7 = futureCount * slotsPerDay;
+  const pastRate = expectedLast7 > 0 ? Math.min(1, postedLast7 / expectedLast7) : 1;
+  const futureRate = expectedNext7 > 0 ? Math.min(1, scheduledNext7 / expectedNext7) : 1;
+  const score = pastRate * 0.6 + futureRate * 0.4;
+
+  let daysSinceLastPost: number | null = null;
+  const lastPostedAt = lastPostRes.data?.[0]?.posted_at;
+  if (lastPostedAt) {
+    const lastK = spDayKey(new Date(lastPostedAt));
+    let count = 0;
+    for (let i = 1; i <= 60; i++) {
+      const d = new Date(now.getTime() - i * 86400000);
+      const k = spDayKey(d);
+      if (k <= lastK) break;
+      if (activeWeekdays.includes(spWeekday(d))) count++;
+    }
+    daysSinceLastPost = count;
+  }
+
+  let status: WsHealth["status"];
+  let message: string;
+  if (daysSinceLastPost !== null && daysSinceLastPost >= 2 && score < 0.85) {
+    status = "warning";
+    message = `Você está há ${daysSinceLastPost} dia${daysSinceLastPost === 1 ? "" : "s"} sem postar nesse perfil`;
+  } else if (score >= 0.85) {
+    status = "excellent";
+    message = "Sua frequência de postagens está excelente";
+  } else if (score >= 0.5) {
+    status = "good";
+    message = "Sua frequência de postagens está boa";
+  } else {
+    status = "warning";
+    message =
+      daysSinceLastPost !== null
+        ? `Você está há ${daysSinceLastPost} dia${daysSinceLastPost === 1 ? "" : "s"} sem postar nesse perfil`
+        : "Sua frequência de postagens está baixa";
+  }
+
+  return {
+    status,
+    message,
+    daysSinceLastPost,
+    postedLast7,
+    expectedLast7,
+    scheduledNext7,
+    expectedNext7,
+  };
+}
+
 
 export const Route = createFileRoute("/api/extension/posts-today")({
   server: {
