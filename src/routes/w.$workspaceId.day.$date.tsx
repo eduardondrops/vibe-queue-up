@@ -202,6 +202,16 @@ function DayList({
     });
   }, [dKey, videos, wsSlots]);
 
+  // Orphan videos: scheduled for this day but NOT matching any configured slot
+  // (e.g., schedule was changed after the video was scheduled). We show them
+  // separately so the user can see them and reorganize the queue.
+  const orphanVideos = useMemo(() => {
+    const validKeys = new Set(slotView.map((s) => slotKey(s.iso)));
+    return videos.filter(
+      (v) => v.scheduled_at && !validKeys.has(slotKey(v.scheduled_at)),
+    );
+  }, [videos, slotView]);
+
   async function handlePosted(id: string) {
     setBusyId(id);
     try {
