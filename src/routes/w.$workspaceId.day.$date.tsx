@@ -701,7 +701,7 @@ function MoveVideoButton({
       });
     }
     return out;
-  }, [taken, currentScheduledAt]);
+  }, [taken, currentScheduledAt, wsSlots]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
