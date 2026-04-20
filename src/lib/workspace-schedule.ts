@@ -55,18 +55,28 @@ export async function getWorkspaceSlots(workspaceId: string): Promise<Slot[]> {
   return parseSlots(sched.slots);
 }
 
-/** Owner-only: update slots. Caller must validate permissions via RLS. */
-export async function updateWorkspaceSlots(workspaceId: string, slots: string[]): Promise<void> {
+/** Owner-only: update slots (and optionally active weekdays). */
+export async function updateWorkspaceSlots(
+  workspaceId: string,
+  slots: string[],
+  activeWeekdays?: number[],
+): Promise<void> {
   const cleaned = parseSlots(slots).map((s) => s.label);
   if (cleaned.length === 0) throw new Error("Defina pelo menos um horário");
 
-  // Upsert (in case a workspace pre-dates the trigger or row was deleted).
+  const payload: Record<string, unknown> = {
+    workspace_id: workspaceId,
+    slots: cleaned,
+  };
+  if (activeWeekdays) {
+    const wd = Array.from(new Set(activeWeekdays.filter((d) => d >= 0 && d <= 6))).sort();
+    if (wd.length === 0) throw new Error("Selecione pelo menos um dia da semana");
+    payload.active_weekdays = wd;
+  }
+
   const { error } = await supabase
     .from("workspace_schedule")
-    .upsert(
-      { workspace_id: workspaceId, slots: cleaned },
-      { onConflict: "workspace_id" },
-    );
+    .upsert(payload, { onConflict: "workspace_id" });
   if (error) throw error;
   cache.delete(workspaceId);
 }
