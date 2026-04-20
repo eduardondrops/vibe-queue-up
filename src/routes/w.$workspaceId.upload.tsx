@@ -300,7 +300,7 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
             <button
               type="button"
               onClick={() => setSlotChoice("auto")}
-              className={`rounded-xl border px-2 py-2.5 text-xs font-semibold transition-all ${
+              className={`min-w-[64px] flex-1 rounded-xl border px-2 py-2.5 text-xs font-semibold transition-all ${
                 slotChoice === "auto"
                   ? "border-primary bg-primary/10 text-foreground"
                   : "border-border bg-surface text-muted-foreground hover:text-foreground"
@@ -315,7 +315,7 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
                 disabled={s.disabled}
                 onClick={() => setSlotChoice(s.iso)}
                 title={s.reason}
-                className={`rounded-xl border px-2 py-2.5 text-xs font-semibold transition-all ${
+                className={`min-w-[64px] flex-1 rounded-xl border px-2 py-2.5 text-xs font-semibold transition-all ${
                   s.disabled
                     ? "cursor-not-allowed border-border/40 bg-muted/30 text-muted-foreground/50"
                     : slotChoice === s.iso
