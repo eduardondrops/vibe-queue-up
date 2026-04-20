@@ -18,6 +18,7 @@ import { Loader2, ImagePlus, UserPlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ApiTokenSection } from "@/components/ApiTokenSection";
 import { InviteMemberDialog } from "@/components/InviteMemberDialog";
+import { WorkspaceScheduleSection } from "@/components/WorkspaceScheduleSection";
 
 export const Route = createFileRoute("/w/$workspaceId/settings")({
   head: () => ({
@@ -68,6 +69,7 @@ function SettingsPage() {
   return (
     <AppShell workspaceId={workspaceId} workspaceName={workspace.name}>
       <SettingsForm workspace={workspace} role={role} onSaved={(w) => setWorkspace(w)} />
+      <WorkspaceScheduleSection workspaceId={workspace.id} canEdit={role === "owner"} />
       {role === "owner" && (
         <MembersSection workspaceId={workspace.id} currentUserId={user.id} />
       )}

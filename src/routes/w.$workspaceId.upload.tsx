@@ -10,12 +10,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { appendToQueue } from "@/lib/queue";
 import { getMyRole, getWorkspace, type Workspace } from "@/lib/workspaces";
 import {
-  SLOTS,
   dayKey,
+  parseSlots,
   slotKey,
   spWallToUtc,
   todayKey,
+  type Slot,
 } from "@/lib/scheduling";
+import { getWorkspaceSchedule } from "@/lib/workspace-schedule";
 import { VideoPreview } from "@/components/VideoPreview";
 import { Upload, Loader2, CalendarClock, ChevronDown, Youtube } from "lucide-react";
 import { toast } from "sonner";
@@ -87,6 +89,17 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
   const [dayChoice, setDayChoice] = useState<string>(todayKey());
   const [slotChoice, setSlotChoice] = useState<SlotChoice>("auto");
   const [takenKeys, setTakenKeys] = useState<Set<string>>(new Set());
+  const [wsSlots, setWsSlots] = useState<Slot[]>(() => parseSlots(null));
+
+  useEffect(() => {
+    let cancel = false;
+    getWorkspaceSchedule(workspaceId).then((s) => {
+      if (!cancel) setWsSlots(parseSlots(s.slots));
+    });
+    return () => {
+      cancel = true;
+    };
+  }, [workspaceId]);
 
   const dayOptions = useMemo(() => {
     const today = new Date();
@@ -134,7 +147,7 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
   const slotOptions = useMemo(() => {
     const [y, m, d] = dayChoice.split("-").map(Number);
     const now = new Date();
-    return SLOTS.map((s) => {
+    return wsSlots.map((s) => {
       const iso = spWallToUtc(y, m, d, s.h, s.m).toISOString();
       const k = slotKey(iso);
       const isPast = new Date(iso).getTime() <= now.getTime();
@@ -146,7 +159,7 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
         reason: isPast ? "Horário já passou" : isTaken ? "Slot ocupado" : "",
       };
     });
-  }, [dayChoice, takenKeys]);
+  }, [dayChoice, takenKeys, wsSlots]);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
@@ -283,11 +296,11 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
 
         <div className="space-y-2">
           <Label>Horário</Label>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setSlotChoice("auto")}
-              className={`rounded-xl border px-2 py-2.5 text-xs font-semibold transition-all ${
+              className={`min-w-[64px] flex-1 rounded-xl border px-2 py-2.5 text-xs font-semibold transition-all ${
                 slotChoice === "auto"
                   ? "border-primary bg-primary/10 text-foreground"
                   : "border-border bg-surface text-muted-foreground hover:text-foreground"
@@ -302,7 +315,7 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
                 disabled={s.disabled}
                 onClick={() => setSlotChoice(s.iso)}
                 title={s.reason}
-                className={`rounded-xl border px-2 py-2.5 text-xs font-semibold transition-all ${
+                className={`min-w-[64px] flex-1 rounded-xl border px-2 py-2.5 text-xs font-semibold transition-all ${
                   s.disabled
                     ? "cursor-not-allowed border-border/40 bg-muted/30 text-muted-foreground/50"
                     : slotChoice === s.iso

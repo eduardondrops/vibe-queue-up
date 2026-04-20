@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { generateUpcomingSlots, getSlotsForDateKey, slotKey } from "./scheduling";
+import { getWorkspaceSlots } from "./workspace-schedule";
 
 export type QueueVideo = {
   id: string;
@@ -50,7 +51,8 @@ export async function recomputeQueue(workspaceId: string): Promise<void> {
   const rows = (data ?? []) as Array<PendingRow & { queue_position: number | null }>;
   if (rows.length === 0) return;
 
-  const upcoming = generateUpcomingSlots();
+  const wsSlots = await getWorkspaceSlots(workspaceId);
+  const upcoming = generateUpcomingSlots(wsSlots);
   const reserved = new Set<string>();
 
   // Reserve pinned slots first.
@@ -237,7 +239,8 @@ export async function moveVideoToDay(
   workspaceId: string,
   dateKey: string,
 ): Promise<{ ok: boolean; slotIso?: string; reason?: "full" | "past" }> {
-  const slots = getSlotsForDateKey(dateKey);
+  const wsSlots = await getWorkspaceSlots(workspaceId);
+  const slots = getSlotsForDateKey(dateKey, wsSlots);
   if (slots.length === 0) return { ok: false, reason: "past" };
 
   // Find which slots are already taken by OTHER pending videos in this workspace.
