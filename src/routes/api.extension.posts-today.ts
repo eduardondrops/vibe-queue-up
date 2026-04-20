@@ -43,13 +43,15 @@ function spWeekday(d: Date): number {
 }
 
 type WsHealth = {
-  status: "excellent" | "good" | "warning";
+  status: "excellent" | "good" | "warning" | "idle";
   message: string;
   daysSinceLastPost: number | null;
   postedLast7: number;
   expectedLast7: number;
   scheduledNext7: number;
   expectedNext7: number;
+  hasEverPosted: boolean;
+  hasUpcoming: boolean;
 };
 
 async function computeHealthForWorkspace(workspaceId: string): Promise<WsHealth> {
@@ -141,9 +143,18 @@ async function computeHealthForWorkspace(workspaceId: string): Promise<WsHealth>
     daysSinceLastPost = count;
   }
 
+  const hasEverPosted = !!lastPostedAt;
+  const hasUpcoming = scheduledNext7 > 0;
+
   let status: WsHealth["status"];
   let message: string;
-  if (daysSinceLastPost !== null && daysSinceLastPost >= 2 && score < 0.85) {
+  if (!hasEverPosted && !hasUpcoming) {
+    status = "idle";
+    message = "Workspace ainda não está em uso";
+  } else if (!hasEverPosted && hasUpcoming) {
+    status = "good";
+    message = `${scheduledNext7} ${scheduledNext7 === 1 ? "post agendado" : "posts agendados"}`;
+  } else if (daysSinceLastPost !== null && daysSinceLastPost >= 2 && score < 0.85) {
     status = "warning";
     message = `Você está há ${daysSinceLastPost} dia${daysSinceLastPost === 1 ? "" : "s"} sem postar nesse perfil`;
   } else if (score >= 0.85) {
@@ -168,6 +179,8 @@ async function computeHealthForWorkspace(workspaceId: string): Promise<WsHealth>
     expectedLast7,
     scheduledNext7,
     expectedNext7,
+    hasEverPosted,
+    hasUpcoming,
   };
 }
 

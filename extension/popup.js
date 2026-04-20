@@ -52,7 +52,7 @@ function renderPosts(posts) {
     .join("");
 }
 
-const HEALTH_DOT = { excellent: "#22c55e", good: "#3b82f6", warning: "#ef4444" };
+const HEALTH_DOT = { excellent: "#22c55e", good: "#3b82f6", warning: "#ef4444", idle: "#6b7280" };
 function renderWorkspaces(workspaces) {
   const el = $("workspaces");
   if (!el) return;
