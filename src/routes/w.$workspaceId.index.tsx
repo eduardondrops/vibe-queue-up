@@ -5,7 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { dayKey, slotLabelForDate } from "@/lib/scheduling";
-import { autoDeleteOldPosted, autoSkipOverdue, moveVideoToDay } from "@/lib/queue";
+import { autoDeleteOldPosted, autoSkipOverdue, moveVideoToDay, recomputeQueue } from "@/lib/queue";
 import { getMyRole, getWorkspace, type Workspace } from "@/lib/workspaces";
 import { ChevronLeft, ChevronRight, UserPlus, GripVertical } from "lucide-react";
 import { InviteMemberDialog } from "@/components/InviteMemberDialog";
