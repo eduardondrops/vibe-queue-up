@@ -108,6 +108,17 @@ function DayList({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [wsSlots, setWsSlots] = useState<Slot[]>(() => parseSlots(null));
+
+  useEffect(() => {
+    let cancel = false;
+    getWorkspaceSchedule(workspaceId).then((s) => {
+      if (!cancel) setWsSlots(parseSlots(s.slots));
+    });
+    return () => {
+      cancel = true;
+    };
+  }, [workspaceId]);
 
   const isPast = dKey < todayKey();
   const isToday = dKey === todayKey();
@@ -177,10 +188,10 @@ function DayList({
     });
   })();
 
-  // Build "slot view" — 3 known slots, each may have a video or be empty.
+  // Build "slot view" — known slots from workspace schedule.
   const slotView = useMemo(() => {
     const [y, m, d] = dKey.split("-").map(Number);
-    return SLOTS.map((s) => {
+    return wsSlots.map((s) => {
       const iso = spWallToUtc(y, m, d, s.h, s.m).toISOString();
       const k = slotKey(iso);
       const video = videos.find(
@@ -189,7 +200,7 @@ function DayList({
       const slotIsPast = new Date(iso).getTime() <= Date.now();
       return { iso, label: s.label, video, slotIsPast };
     });
-  }, [dKey, videos]);
+  }, [dKey, videos, wsSlots]);
 
   async function handlePosted(id: string) {
     setBusyId(id);
