@@ -64,19 +64,20 @@ export async function updateWorkspaceSlots(
   const cleaned = parseSlots(slots).map((s) => s.label);
   if (cleaned.length === 0) throw new Error("Defina pelo menos um horário");
 
-  const payload: Record<string, unknown> = {
-    workspace_id: workspaceId,
-    slots: cleaned,
-  };
+  let wd: number[] | undefined;
   if (activeWeekdays) {
-    const wd = Array.from(new Set(activeWeekdays.filter((d) => d >= 0 && d <= 6))).sort();
+    wd = Array.from(new Set(activeWeekdays.filter((d) => d >= 0 && d <= 6))).sort();
     if (wd.length === 0) throw new Error("Selecione pelo menos um dia da semana");
-    payload.active_weekdays = wd;
   }
 
   const { error } = await supabase
     .from("workspace_schedule")
-    .upsert(payload, { onConflict: "workspace_id" });
+    .upsert(
+      wd
+        ? { workspace_id: workspaceId, slots: cleaned, active_weekdays: wd }
+        : { workspace_id: workspaceId, slots: cleaned },
+      { onConflict: "workspace_id" },
+    );
   if (error) throw error;
   cache.delete(workspaceId);
 }
