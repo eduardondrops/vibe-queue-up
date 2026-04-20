@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getWorkspaceSchedule } from "./workspace-schedule";
 import { TIMEZONE } from "./scheduling";
 
-export type HealthStatus = "excellent" | "good" | "warning";
+export type HealthStatus = "excellent" | "good" | "warning" | "idle";
 
 export type PostingHealth = {
   status: HealthStatus;
@@ -19,6 +19,8 @@ export type PostingHealth = {
   daysSinceLastPost: number | null; // active days since last posted (null = never posted)
   activeWeekdays: number[];
   slotsPerDay: number;
+  hasEverPosted: boolean;
+  hasUpcoming: boolean;
 };
 
 /** Returns the SP weekday (0=Sun..6=Sat) for a Date. */
