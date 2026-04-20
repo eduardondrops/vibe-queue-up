@@ -306,13 +306,13 @@ function DayList({
       ) : (
         <>
           {orphanVideos.length > 0 && (
-            <div className="mb-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4">
+            <div className="glass mb-3 rounded-2xl border border-destructive/40 bg-destructive/10 p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="font-display text-sm font-bold text-amber-200">
+                  <p className="font-display text-sm font-bold text-destructive">
                     {orphanVideos.length} {orphanVideos.length === 1 ? "vídeo fora" : "vídeos fora"} dos horários atuais
                   </p>
-                  <p className="mt-0.5 text-xs text-amber-100/80">
+                  <p className="mt-0.5 text-xs text-muted-foreground">
                     A estratégia mudou depois que esses vídeos foram agendados. Reorganize a fila para encaixar nos novos horários.
                   </p>
                 </div>
@@ -320,7 +320,7 @@ function DayList({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="border-amber-400/60 text-amber-100 hover:bg-amber-500/20"
+                    className="border-destructive/60 text-destructive hover:bg-destructive/20"
                     onClick={async () => {
                       try {
                         await recomputeQueue(workspaceId);
@@ -335,7 +335,7 @@ function DayList({
                   </Button>
                 )}
               </div>
-              <ul className="mt-2 space-y-1 text-xs text-amber-100/90">
+              <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
                 {orphanVideos.map((v) => (
                   <li key={v.id}>
                     • {v.scheduled_at ? slotLabelForDate(v.scheduled_at) : "--:--"} —{" "}
