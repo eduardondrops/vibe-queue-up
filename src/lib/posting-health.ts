@@ -145,10 +145,24 @@ export async function getPostingHealth(workspaceId: string): Promise<PostingHeal
     daysSinceLastPost = count;
   }
 
+  const hasEverPosted = !!lastPostedAt;
+  const hasUpcoming = scheduledNext7 > 0;
+
   // Classification
   let status: HealthStatus;
   let message: string;
-  if (daysSinceLastPost !== null && daysSinceLastPost >= 2 && score < 0.85) {
+
+  // Idle: workspace ainda não está em uso real.
+  // - Nunca postou nada E não tem nada agendado nos próximos 7 dias.
+  // - Após 7 dias da primeira atividade real, sai do idle automaticamente.
+  if (!hasEverPosted && !hasUpcoming) {
+    status = "idle";
+    message = "Cadastre seu primeiro vídeo pra começar a medir sua frequência";
+  } else if (!hasEverPosted && hasUpcoming) {
+    // Tem agendado mas ainda não postou — mostra um estado neutro positivo.
+    status = "good";
+    message = `${scheduledNext7} ${scheduledNext7 === 1 ? "post agendado" : "posts agendados"} para os próximos dias`;
+  } else if (daysSinceLastPost !== null && daysSinceLastPost >= 2 && score < 0.85) {
     status = "warning";
     message = `Você está há ${daysSinceLastPost} dia${daysSinceLastPost === 1 ? "" : "s"} sem postar nesse perfil`;
   } else if (score >= 0.85) {
@@ -176,5 +190,7 @@ export async function getPostingHealth(workspaceId: string): Promise<PostingHeal
     daysSinceLastPost,
     activeWeekdays,
     slotsPerDay,
+    hasEverPosted,
+    hasUpcoming,
   };
 }
