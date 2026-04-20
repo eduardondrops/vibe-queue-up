@@ -141,7 +141,11 @@ export async function recomputeQueue(workspaceId: string): Promise<void> {
     ) {
       continue;
     }
-    const update: Record<string, unknown> = {
+    const update: {
+      scheduled_at: string;
+      queue_position: number;
+      pinned?: boolean;
+    } = {
       scheduled_at: val.scheduled_at,
       queue_position: val.queue_position,
     };
