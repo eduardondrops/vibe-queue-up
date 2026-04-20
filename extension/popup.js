@@ -94,9 +94,15 @@ async function refresh() {
   if (!token) return showSetup();
   setStatus("Atualizando...");
   try {
-    const { posts } = await fetchPosts(token);
-    await chrome.storage.local.set({ lastPosts: posts, lastFetch: Date.now(), authError: false });
+    const { posts, workspaces } = await fetchPosts(token);
+    await chrome.storage.local.set({
+      lastPosts: posts,
+      lastWorkspaces: workspaces || [],
+      lastFetch: Date.now(),
+      authError: false,
+    });
     renderPosts(posts);
+    renderWorkspaces(workspaces || []);
     setStatus(`${posts.length} post(s) hoje · ${new Date().toLocaleTimeString("pt-BR")}`, "ok");
     chrome.runtime.sendMessage({ type: "RUN_NOW" }).catch(() => {});
   } catch (e) {
@@ -104,9 +110,12 @@ async function refresh() {
       setStatus("Token inválido ou expirado. Edite o token.", "err");
     } else {
       setStatus("Sem conexão — tentaremos novamente em 1 min", "err");
-      // mostra cache
-      const { lastPosts = [] } = await chrome.storage.local.get("lastPosts");
+      const { lastPosts = [], lastWorkspaces = [] } = await chrome.storage.local.get([
+        "lastPosts",
+        "lastWorkspaces",
+      ]);
       renderPosts(lastPosts);
+      renderWorkspaces(lastWorkspaces);
     }
   }
 }
