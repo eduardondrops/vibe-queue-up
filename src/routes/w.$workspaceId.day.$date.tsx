@@ -621,6 +621,17 @@ function MoveVideoButton({
   const [open, setOpen] = useState(false);
   const [taken, setTaken] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const [wsSlots, setWsSlots] = useState<Slot[]>(() => parseSlots(null));
+
+  useEffect(() => {
+    let cancel = false;
+    getWorkspaceSchedule(workspaceId).then((s) => {
+      if (!cancel) setWsSlots(parseSlots(s.slots));
+    });
+    return () => {
+      cancel = true;
+    };
+  }, [workspaceId]);
 
   // Preload taken slots for next 14 days when popover opens.
   useEffect(() => {
@@ -665,7 +676,7 @@ function MoveVideoButton({
       const m = d.getMonth() + 1;
       const day = d.getDate();
       const k = dayKey(d);
-      const slots = SLOTS.map((s) => {
+      const slots = wsSlots.map((s) => {
         const iso = spWallToUtc(y, m, day, s.h, s.m).toISOString();
         const sk = slotKey(iso);
         const isPast = new Date(iso).getTime() <= Date.now();
