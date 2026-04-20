@@ -325,6 +325,19 @@ export type Database = {
           workspace_name: string
         }[]
       }
+      admin_list_all_memberships: {
+        Args: never
+        Returns: {
+          joined_at: string
+          role: Database["public"]["Enums"]["workspace_role"]
+          user_display_name: string
+          user_email: string
+          user_id: string
+          workspace_avatar_url: string
+          workspace_id: string
+          workspace_name: string
+        }[]
+      }
       find_user_by_email_for_workspace: {
         Args: { _email: string; _workspace_id: string }
         Returns: {
@@ -362,6 +375,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_super_admin: { Args: never; Returns: boolean }
       is_workspace_member: {
         Args: { _user_id: string; _workspace_id: string }
         Returns: boolean
