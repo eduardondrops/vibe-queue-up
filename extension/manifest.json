@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PostFlow Notifier",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Recebe notificações dos seus posts agendados no PostFlow — 10 min antes e na hora exata.",
   "permissions": ["storage", "alarms", "notifications"],
   "host_permissions": ["https://vibe-queue-up.lovable.app/*"],

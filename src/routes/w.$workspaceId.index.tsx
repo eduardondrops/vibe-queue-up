@@ -9,6 +9,7 @@ import { autoDeleteOldPosted, autoSkipOverdue, moveVideoToDay } from "@/lib/queu
 import { getMyRole, getWorkspace, type Workspace } from "@/lib/workspaces";
 import { ChevronLeft, ChevronRight, UserPlus, GripVertical } from "lucide-react";
 import { InviteMemberDialog } from "@/components/InviteMemberDialog";
+import { PostingHealthCard } from "@/components/PostingHealthCard";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -289,6 +290,7 @@ function Calendar({
       }}
     >
       <div>
+        <PostingHealthCard workspaceId={workspaceId} />
         <div className="mb-6 flex items-end justify-between">
           <div>
             <p className="text-xs uppercase tracking-widest text-muted-foreground">
