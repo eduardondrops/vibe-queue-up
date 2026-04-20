@@ -11,6 +11,8 @@ import {
   uploadWorkspaceAvatar,
   type Workspace,
 } from "@/lib/workspaces";
+import { updateWorkspaceSlots } from "@/lib/workspace-schedule";
+import { isSuperAdmin } from "@/lib/admin";
 import {
   Plus,
   Instagram,
@@ -22,6 +24,10 @@ import {
   X,
   ImagePlus,
   Loader2,
+  ShieldCheck,
+  ArrowLeft,
+  Clock,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
