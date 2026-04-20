@@ -42,13 +42,32 @@ function renderPosts(posts) {
     return;
   }
   const now = Date.now();
-  // marca o próximo ainda futuro
   const nextIdx = posts.findIndex((p) => new Date(p.scheduled_at).getTime() > now);
   el.innerHTML = posts
     .map((p, i) => `
       <div class="post${i === nextIdx ? " next" : ""}">
         <div class="t">${escapeHtml(p.title)}</div>
         <div class="m">${fmtTime(p.scheduled_at)} · ${escapeHtml(p.workspace_name || "")} · ${escapeHtml(p.status)}</div>
+      </div>`)
+    .join("");
+}
+
+const HEALTH_DOT = { excellent: "#22c55e", good: "#3b82f6", warning: "#ef4444" };
+function renderWorkspaces(workspaces) {
+  const el = $("workspaces");
+  if (!el) return;
+  if (!workspaces || workspaces.length === 0) {
+    el.innerHTML = "";
+    return;
+  }
+  el.innerHTML = workspaces
+    .map((w) => `
+      <div class="ws">
+        <span class="ws-dot" style="background:${HEALTH_DOT[w.status] || "#6b7280"}"></span>
+        <div class="ws-body">
+          <div class="ws-name">${escapeHtml(w.name)}</div>
+          <div class="ws-msg">${escapeHtml(w.message || "")}</div>
+        </div>
       </div>`)
     .join("");
 }

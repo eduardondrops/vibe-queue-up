@@ -143,8 +143,10 @@ async function runCycle() {
       return;
     }
     const posts = Array.isArray(payload?.posts) ? payload.posts : [];
+    const workspaces = Array.isArray(payload?.workspaces) ? payload.workspaces : [];
     await chrome.storage.local.set({
       lastPosts: posts,
+      lastWorkspaces: workspaces,
       lastFetch: Date.now(),
       authError: false,
     });
@@ -156,9 +158,33 @@ async function runCycle() {
         await showPostNotification(p, kind);
       }
     }
+
+    // Low-frequency warning: 1x per workspace per day
+    for (const w of workspaces) {
+      if (w.status === "warning") {
+        await showHealthWarning(w);
+      }
+    }
   } finally {
     runLock = false;
   }
+}
+
+async function showHealthWarning(ws) {
+  const today = new Date();
+  const dayK = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const key = `health:${ws.id}:${dayK}`;
+  if (await alreadyNotified(key)) return;
+  const notifId = `pf-health:${ws.id}:${dayK}`;
+  await chrome.notifications.create(notifId, {
+    type: "basic",
+    iconUrl: "icon.png",
+    title: `⚠️ ${ws.name || "Workspace"}`,
+    message: ws.message || "Sua frequência de postagens está baixa",
+    priority: 2,
+    requireInteraction: false,
+  });
+  await markNotified(key);
 }
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -177,7 +203,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 });
 
 chrome.notifications.onClicked.addListener(async (id) => {
-  // id format: "pf:<workspaceId>:<YYYY-MM-DD>:<postId>:<kind>"  ou "pf-auth-error"
+  // id formats:
+  //   pf:<workspaceId>:<YYYY-MM-DD>:<postId>:<kind>
+  //   pf-health:<workspaceId>:<YYYY-MM-DD>
+  //   pf-auth-error
   let url = APP_ORIGIN + "/";
   if (id.startsWith("pf:")) {
     const parts = id.split(":");
@@ -185,6 +214,12 @@ chrome.notifications.onClicked.addListener(async (id) => {
     const date = parts[2];
     if (workspaceId && date) {
       url = `${APP_ORIGIN}/w/${workspaceId}/day/${date}`;
+    }
+  } else if (id.startsWith("pf-health:")) {
+    const parts = id.split(":");
+    const workspaceId = parts[1];
+    if (workspaceId) {
+      url = `${APP_ORIGIN}/w/${workspaceId}/upload`;
     }
   }
   chrome.tabs.create({ url });
