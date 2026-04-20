@@ -220,7 +220,7 @@ function WorkspaceMemberCard({
 function RoleBadge({ role }: { role: "owner" | "editor" | "viewer" }) {
   if (role === "owner") {
     return (
-      <Badge className="gap-1 bg-amber-500/15 text-amber-600 hover:bg-amber-500/15">
+      <Badge className="gap-1 bg-accent/15 text-accent-foreground hover:bg-accent/20">
         <Crown className="h-3 w-3" /> Owner
       </Badge>
     );
