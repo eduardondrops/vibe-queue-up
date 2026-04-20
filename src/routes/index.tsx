@@ -44,10 +44,17 @@ export const Route = createFileRoute("/")({
 function HomePage() {
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
+  const [showAdminLink, setShowAdminLink] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
   }, [loading, user, navigate]);
+
+  useEffect(() => {
+    if (user) {
+      isSuperAdmin().then(setShowAdminLink).catch(() => setShowAdminLink(false));
+    }
+  }, [user]);
 
   if (loading || !user) {
     return (
@@ -69,15 +76,29 @@ function HomePage() {
               Post<span className="grad-text">Flow</span>
             </span>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => signOut()}
-            className="text-muted-foreground hover:text-foreground"
-            aria-label="Sair"
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {showAdminLink && (
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <Link to="/admin" aria-label="Painel admin">
+                  <ShieldCheck className="h-4 w-4" />
+                </Link>
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => signOut()}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label="Sair"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </header>
       <main className="mx-auto w-full max-w-3xl px-4 pb-16 pt-6">
