@@ -296,7 +296,7 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
 
         <div className="space-y-2">
           <Label>Horário</Label>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setSlotChoice("auto")}
