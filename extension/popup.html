@@ -83,6 +83,22 @@
       .post .t { font-weight: 600; }
       .post .m { color: #9aa0aa; font-size: 11px; margin-top: 2px; }
       .empty { font-size: 12px; color: #9aa0aa; text-align: center; padding: 14px 0; }
+      .ws-list { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+      .ws {
+        display: flex; gap: 9px; align-items: flex-start;
+        padding: 8px 10px;
+        background: #16161e;
+        border: 1px solid #26262f;
+        border-radius: 10px;
+      }
+      .ws-dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        margin-top: 5px; flex-shrink: 0;
+        box-shadow: 0 0 6px currentColor;
+      }
+      .ws-body { min-width: 0; flex: 1; }
+      .ws-name { font-size: 12px; font-weight: 600; color: #f4f4f6; }
+      .ws-msg { font-size: 11px; color: #9aa0aa; margin-top: 1px; line-height: 1.3; }
       .toggle {
         margin-top: 10px;
         background: transparent;
