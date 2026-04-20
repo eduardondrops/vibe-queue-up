@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, TrendingUp, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Loader2, TrendingUp, CheckCircle2, AlertTriangle, Sparkles } from "lucide-react";
 import { getPostingHealth, type PostingHealth } from "@/lib/posting-health";
 
 const STATUS_STYLES: Record<
@@ -23,6 +23,12 @@ const STATUS_STYLES: Record<
     icon: "text-destructive",
     Icon: AlertTriangle,
     label: "Atenção",
+  },
+  idle: {
+    wrap: "border-border bg-surface",
+    icon: "text-muted-foreground",
+    Icon: Sparkles,
+    label: "Aguardando",
   },
 };
 
