@@ -281,6 +281,14 @@ function WorkspaceCard({
   );
 }
 
+const TIME_RE = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+
+function normalizeTime(input: string): string | null {
+  const m = TIME_RE.exec(input.trim());
+  if (!m) return null;
+  return `${m[1].padStart(2, "0")}:${m[2]}`;
+}
+
 function CreateWorkspaceModal({
   onClose,
   onCreated,
@@ -288,18 +296,52 @@ function CreateWorkspaceModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  // Step 1: profile info
+  const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState("");
   const [instagram, setInstagram] = useState("");
   const [tiktok, setTiktok] = useState("");
   const [youtube, setYoutube] = useState("");
   const [facebook, setFacebook] = useState("");
   const [avatar, setAvatar] = useState<File | null>(null);
+
+  // Step 2: posting strategy
+  const [slots, setSlots] = useState<string[]>(["12:00"]);
+  const [draft, setDraft] = useState("");
+
   const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit(e: FormEvent) {
+  function goToStep2(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
       toast.error("Dê um nome ao perfil");
+      return;
+    }
+    setStep(2);
+  }
+
+  function addSlot() {
+    const norm = normalizeTime(draft);
+    if (!norm) {
+      toast.error("Use o formato HH:MM (ex: 09:30)");
+      return;
+    }
+    if (slots.includes(norm)) {
+      toast.error("Esse horário já está na lista");
+      return;
+    }
+    setSlots((curr) => [...curr, norm].sort((a, b) => a.localeCompare(b)));
+    setDraft("");
+  }
+
+  function removeSlot(s: string) {
+    setSlots((curr) => curr.filter((x) => x !== s));
+  }
+
+  async function handleFinalSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (slots.length === 0) {
+      toast.error("Adicione pelo menos um horário de postagem");
       return;
     }
     setSubmitting(true);
@@ -309,7 +351,6 @@ function CreateWorkspaceModal({
         try {
           avatarPath = await uploadWorkspaceAvatar(avatar);
         } catch (err) {
-          // Don't block creation if avatar fails — warn and continue.
           console.error("avatar upload failed, continuing without it", err);
           toast.warning(
             err instanceof Error
@@ -318,7 +359,7 @@ function CreateWorkspaceModal({
           );
         }
       }
-      await createWorkspace({
+      const ws = await createWorkspace({
         name: name.trim(),
         avatar_url: avatarPath,
         instagram_url: instagram.trim() || null,
@@ -326,6 +367,13 @@ function CreateWorkspaceModal({
         youtube_url: youtube.trim() || null,
         facebook_url: facebook.trim() || null,
       });
+      // Override the default schedule with the user's choice.
+      try {
+        await updateWorkspaceSlots(ws.id, slots);
+      } catch (err) {
+        console.error("failed to apply custom schedule, defaults will remain", err);
+        toast.warning("Perfil criado, mas a estratégia de horários não foi salva. Ajuste em Configurações.");
+      }
       toast.success("Perfil criado");
       onCreated();
     } catch (e) {
@@ -340,97 +388,201 @@ function CreateWorkspaceModal({
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
       <div className="glass w-full max-w-lg overflow-hidden rounded-t-2xl shadow-[var(--shadow-card)] sm:rounded-2xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <h2 className="font-display text-lg font-bold">Novo perfil</h2>
-          <button
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
-            aria-label="Fechar"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4 px-5 py-5">
-          <div className="space-y-2">
-            <Label htmlFor="ws-avatar">Avatar (opcional)</Label>
-            <label
-              htmlFor="ws-avatar"
-              className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-border bg-surface px-3 py-3 text-sm transition-colors hover:border-primary/60"
-            >
-              <ImagePlus className="h-5 w-5 text-muted-foreground" />
-              <span className="text-muted-foreground">
-                {avatar ? avatar.name : "Toque para escolher"}
-              </span>
-            </label>
-            <input
-              id="ws-avatar"
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => setAvatar(e.target.files?.[0] ?? null)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ws-name">Nome do perfil</Label>
-            <Input
-              id="ws-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: Padre, Bruxa Mística"
-              required
-            />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="ws-ig">Instagram</Label>
-              <Input
-                id="ws-ig"
-                value={instagram}
-                onChange={(e) => setInstagram(e.target.value)}
-                placeholder="https://instagram.com/..."
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="ws-tt">TikTok</Label>
-              <Input
-                id="ws-tt"
-                value={tiktok}
-                onChange={(e) => setTiktok(e.target.value)}
-                placeholder="https://tiktok.com/@..."
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="ws-yt">YouTube</Label>
-              <Input
-                id="ws-yt"
-                value={youtube}
-                onChange={(e) => setYoutube(e.target.value)}
-                placeholder="https://youtube.com/..."
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="ws-fb">Facebook</Label>
-              <Input
-                id="ws-fb"
-                value={facebook}
-                onChange={(e) => setFacebook(e.target.value)}
-                placeholder="https://facebook.com/..."
-              />
-            </div>
-          </div>
-          <Button
-            type="submit"
-            disabled={submitting}
-            className="w-full grad-bg text-primary-foreground hover:opacity-90"
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Criando...
-              </>
-            ) : (
-              "Criar perfil"
+          <div className="flex items-center gap-2">
+            {step === 2 && (
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="text-muted-foreground hover:text-foreground"
+                aria-label="Voltar"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
             )}
-          </Button>
-        </form>
+            <h2 className="font-display text-lg font-bold">
+              {step === 1 ? "Novo perfil" : "Quando você posta?"}
+            </h2>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-medium text-muted-foreground">
+              {step}/2
+            </span>
+            <button
+              onClick={onClose}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label="Fechar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        {step === 1 ? (
+          <form onSubmit={goToStep2} className="space-y-4 px-5 py-5">
+            <div className="space-y-2">
+              <Label htmlFor="ws-avatar">Avatar (opcional)</Label>
+              <label
+                htmlFor="ws-avatar"
+                className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-border bg-surface px-3 py-3 text-sm transition-colors hover:border-primary/60"
+              >
+                <ImagePlus className="h-5 w-5 text-muted-foreground" />
+                <span className="text-muted-foreground">
+                  {avatar ? avatar.name : "Toque para escolher"}
+                </span>
+              </label>
+              <input
+                id="ws-avatar"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => setAvatar(e.target.files?.[0] ?? null)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ws-name">Nome do perfil</Label>
+              <Input
+                id="ws-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ex: Padre, Bruxa Mística"
+                required
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="ws-ig">Instagram</Label>
+                <Input
+                  id="ws-ig"
+                  value={instagram}
+                  onChange={(e) => setInstagram(e.target.value)}
+                  placeholder="https://instagram.com/..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ws-tt">TikTok</Label>
+                <Input
+                  id="ws-tt"
+                  value={tiktok}
+                  onChange={(e) => setTiktok(e.target.value)}
+                  placeholder="https://tiktok.com/@..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ws-yt">YouTube</Label>
+                <Input
+                  id="ws-yt"
+                  value={youtube}
+                  onChange={(e) => setYoutube(e.target.value)}
+                  placeholder="https://youtube.com/..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ws-fb">Facebook</Label>
+                <Input
+                  id="ws-fb"
+                  value={facebook}
+                  onChange={(e) => setFacebook(e.target.value)}
+                  placeholder="https://facebook.com/..."
+                />
+              </div>
+            </div>
+            <Button
+              type="submit"
+              className="w-full grad-bg text-primary-foreground hover:opacity-90"
+            >
+              Próximo: horários
+            </Button>
+          </form>
+        ) : (
+          <form onSubmit={handleFinalSubmit} className="space-y-5 px-5 py-5">
+            <p className="text-sm text-muted-foreground">
+              Quantos posts por dia e em quais horários (fuso de São Paulo)?
+              Você pode mudar isso depois em Configurações.
+            </p>
+
+            <div>
+              <Label className="mb-2 flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
+                <Clock className="h-3.5 w-3.5" />
+                Horários ({slots.length} {slots.length === 1 ? "post" : "posts"} por dia)
+              </Label>
+              {slots.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-border bg-surface px-3 py-3 text-xs text-muted-foreground">
+                  Nenhum horário ainda. Adicione abaixo.
+                </p>
+              ) : (
+                <ul className="flex flex-wrap gap-2">
+                  {slots.map((s) => (
+                    <li
+                      key={s}
+                      className="flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-1.5 text-sm font-semibold"
+                    >
+                      <span>{s}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeSlot(s)}
+                        className="rounded-md p-0.5 text-muted-foreground hover:text-destructive"
+                        aria-label={`Remover ${s}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="flex items-end gap-2">
+              <div className="flex-1 space-y-1.5">
+                <Label htmlFor="ws-slot-new" className="text-xs">
+                  Adicionar horário (HH:MM)
+                </Label>
+                <Input
+                  id="ws-slot-new"
+                  type="time"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                />
+              </div>
+              <Button type="button" variant="outline" onClick={addSlot} disabled={!draft}>
+                <Plus className="mr-1 h-4 w-4" /> Adicionar
+              </Button>
+            </div>
+
+            <div className="rounded-xl border border-border/50 bg-surface/40 p-3 text-xs text-muted-foreground">
+              <strong className="text-foreground">Sugestões rápidas:</strong>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {[
+                  ["12:00"],
+                  ["12:00", "18:30"],
+                  ["10:00", "18:30", "21:00"],
+                ].map((preset) => (
+                  <button
+                    key={preset.join(",")}
+                    type="button"
+                    onClick={() => setSlots(preset)}
+                    className="rounded-lg border border-border bg-background px-2.5 py-1 font-medium text-foreground hover:border-primary/60"
+                  >
+                    {preset.length}× ({preset.join(", ")})
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              disabled={submitting || slots.length === 0}
+              className="w-full grad-bg text-primary-foreground hover:opacity-90"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Criando...
+                </>
+              ) : (
+                "Criar perfil"
+              )}
+            </Button>
+          </form>
+        )}
       </div>
     </div>
   );
