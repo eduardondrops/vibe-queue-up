@@ -10,12 +10,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { appendToQueue } from "@/lib/queue";
 import { getMyRole, getWorkspace, type Workspace } from "@/lib/workspaces";
 import {
-  SLOTS,
   dayKey,
+  parseSlots,
   slotKey,
   spWallToUtc,
   todayKey,
+  type Slot,
 } from "@/lib/scheduling";
+import { getWorkspaceSchedule } from "@/lib/workspace-schedule";
 import { VideoPreview } from "@/components/VideoPreview";
 import { Upload, Loader2, CalendarClock, ChevronDown, Youtube } from "lucide-react";
 import { toast } from "sonner";
@@ -87,6 +89,17 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
   const [dayChoice, setDayChoice] = useState<string>(todayKey());
   const [slotChoice, setSlotChoice] = useState<SlotChoice>("auto");
   const [takenKeys, setTakenKeys] = useState<Set<string>>(new Set());
+  const [wsSlots, setWsSlots] = useState<Slot[]>(() => parseSlots(null));
+
+  useEffect(() => {
+    let cancel = false;
+    getWorkspaceSchedule(workspaceId).then((s) => {
+      if (!cancel) setWsSlots(parseSlots(s.slots));
+    });
+    return () => {
+      cancel = true;
+    };
+  }, [workspaceId]);
 
   const dayOptions = useMemo(() => {
     const today = new Date();
@@ -134,7 +147,7 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
   const slotOptions = useMemo(() => {
     const [y, m, d] = dayChoice.split("-").map(Number);
     const now = new Date();
-    return SLOTS.map((s) => {
+    return wsSlots.map((s) => {
       const iso = spWallToUtc(y, m, d, s.h, s.m).toISOString();
       const k = slotKey(iso);
       const isPast = new Date(iso).getTime() <= now.getTime();
@@ -146,7 +159,7 @@ function UploadForm({ workspaceId }: { workspaceId: string }) {
         reason: isPast ? "Horário já passou" : isTaken ? "Slot ocupado" : "",
       };
     });
-  }, [dayChoice, takenKeys]);
+  }, [dayChoice, takenKeys, wsSlots]);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
