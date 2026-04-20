@@ -238,6 +238,7 @@ export type Database = {
       }
       workspace_schedule: {
         Row: {
+          active_weekdays: number[]
           created_at: string
           id: string
           slots: string[]
@@ -246,6 +247,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          active_weekdays?: number[]
           created_at?: string
           id?: string
           slots?: string[]
@@ -254,6 +256,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          active_weekdays?: number[]
           created_at?: string
           id?: string
           slots?: string[]
