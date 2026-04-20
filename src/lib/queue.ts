@@ -127,22 +127,26 @@ export async function recomputeQueue(workspaceId: string): Promise<void> {
 
   // Persist only changed rows.
   const byId = new Map(rows.map((r) => [r.id, r]));
+  const honoredPinnedIds = new Set(pinned.map((p) => p.id));
   const updates: Array<PromiseLike<unknown>> = [];
   for (const [id, val] of assignments) {
     const prev = byId.get(id);
     if (!prev) continue;
-    if (prev.scheduled_at === val.scheduled_at && prev.queue_position === val.queue_position) {
+    // If this was a pinned video that lost its pinning (orphan), unpin it too.
+    const shouldUnpin = prev.pinned && !honoredPinnedIds.has(id);
+    if (
+      prev.scheduled_at === val.scheduled_at &&
+      prev.queue_position === val.queue_position &&
+      !shouldUnpin
+    ) {
       continue;
     }
-    updates.push(
-      supabase
-        .from("videos")
-        .update({
-          scheduled_at: val.scheduled_at,
-          queue_position: val.queue_position,
-        })
-        .eq("id", id),
-    );
+    const update: Record<string, unknown> = {
+      scheduled_at: val.scheduled_at,
+      queue_position: val.queue_position,
+    };
+    if (shouldUnpin) update.pinned = false;
+    updates.push(supabase.from("videos").update(update).eq("id", id));
   }
 
   if (updates.length > 0) {
