@@ -4,13 +4,15 @@ import { useAuth } from "@/lib/auth-context";
 import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  SLOTS,
   dayKey,
+  parseSlots,
   slotKey,
   slotLabelForDate,
   spWallToUtc,
   todayKey,
+  type Slot,
 } from "@/lib/scheduling";
+import { getWorkspaceSchedule } from "@/lib/workspace-schedule";
 import { markPosted, moveVideoToSlot, skipVideo, type QueueVideo } from "@/lib/queue";
 import { getMyRole, getWorkspace, type Workspace } from "@/lib/workspaces";
 import { generateCaption, buildYouTube } from "@/lib/captions";
