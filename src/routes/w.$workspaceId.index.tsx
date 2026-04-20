@@ -77,7 +77,12 @@ function WorkspaceCalendarPage() {
         if (!w) {
           navigate({ to: "/" });
         } else {
-          autoSkipOverdue(workspaceId).catch(() => {});
+          // Run housekeeping: skip overdue, delete old posted, then recompute
+          // so any orphan videos (e.g. after a schedule change) get realocated
+          // to the next valid free slots.
+          autoSkipOverdue(workspaceId)
+            .catch(() => {})
+            .finally(() => recomputeQueue(workspaceId).catch(() => {}));
           autoDeleteOldPosted(workspaceId).catch(() => {});
         }
       }
