@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, TrendingUp, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Loader2, TrendingUp, CheckCircle2, AlertTriangle, Sparkles } from "lucide-react";
 import { getPostingHealth, type PostingHealth } from "@/lib/posting-health";
 
 const STATUS_STYLES: Record<
@@ -23,6 +23,12 @@ const STATUS_STYLES: Record<
     icon: "text-destructive",
     Icon: AlertTriangle,
     label: "Atenção",
+  },
+  idle: {
+    wrap: "border-border bg-surface",
+    icon: "text-muted-foreground",
+    Icon: Sparkles,
+    label: "Aguardando",
   },
 };
 
@@ -79,10 +85,16 @@ export function PostingHealthCard({ workspaceId }: { workspaceId: string }) {
             {style.label}
           </span>
         </div>
-        <p className="mt-1.5 text-xs text-muted-foreground">
-          {data.postedLast7}/{data.expectedLast7} postados nos últimos 7 dias ativos ·{" "}
-          {data.scheduledNext7}/{data.expectedNext7} agendados para os próximos 7
-        </p>
+        {data.status === "idle" ? (
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Vamos começar a medir sua frequência depois do primeiro post.
+          </p>
+        ) : (
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            {data.postedLast7}/{data.expectedLast7} postados nos últimos 7 dias ativos ·{" "}
+            {data.scheduledNext7}/{data.expectedNext7} agendados para os próximos 7
+          </p>
+        )}
       </div>
     </div>
   );

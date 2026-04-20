@@ -53,23 +53,41 @@ export async function recomputeQueue(workspaceId: string): Promise<void> {
 
   const wsSlots = await getWorkspaceSlots(workspaceId);
   const upcoming = generateUpcomingSlots(wsSlots);
+  const validSlotKeys = new Set(upcoming.map((d) => slotKey(d)));
   const reserved = new Set<string>();
 
-  // Reserve pinned slots first.
-  const pinned = rows.filter((r) => r.pinned && r.scheduled_at);
-  for (const p of pinned) {
-    if (p.scheduled_at) reserved.add(slotKey(p.scheduled_at));
+  // A pinned video is only honored if its slot still matches a configured slot
+  // AND is in the future. Otherwise it becomes floating (orphan after schedule
+  // changes / past slot that never got posted).
+  const pinnedHonored: typeof rows = [];
+  const orphans: typeof rows = [];
+  for (const r of rows) {
+    if (!r.scheduled_at) {
+      if (!r.pinned) orphans.push(r);
+      continue;
+    }
+    const k = slotKey(r.scheduled_at);
+    const isFuture = new Date(r.scheduled_at).getTime() > Date.now();
+    if (r.pinned && validSlotKeys.has(k) && isFuture) {
+      pinnedHonored.push(r);
+      reserved.add(k);
+    } else if (!r.pinned && validSlotKeys.has(k) && isFuture) {
+      // Floating but already on a valid future slot — keep its order via scheduled_at.
+      orphans.push(r);
+    } else {
+      // Orphan: invalid slot (schedule changed, or in the past).
+      orphans.push(r);
+    }
   }
 
-  // Non-pinned: keep cronological order by previous scheduled_at, then created_at.
-  const floating = rows
-    .filter((r) => !r.pinned)
-    .sort((a, b) => {
+  // Sort orphans/floating chronologically (past-scheduled first, then by created_at).
+  const floating = orphans.sort((a, b) => {
       const sa = a.scheduled_at ?? a.created_at;
       const sb = b.scheduled_at ?? b.created_at;
       if (sa === sb) return a.created_at.localeCompare(b.created_at);
       return sa.localeCompare(sb);
     });
+  const pinned = pinnedHonored;
 
   const assignments = new Map<string, { scheduled_at: string; queue_position: number }>();
   let cursor = 0;
@@ -109,22 +127,30 @@ export async function recomputeQueue(workspaceId: string): Promise<void> {
 
   // Persist only changed rows.
   const byId = new Map(rows.map((r) => [r.id, r]));
+  const honoredPinnedIds = new Set(pinned.map((p) => p.id));
   const updates: Array<PromiseLike<unknown>> = [];
   for (const [id, val] of assignments) {
     const prev = byId.get(id);
     if (!prev) continue;
-    if (prev.scheduled_at === val.scheduled_at && prev.queue_position === val.queue_position) {
+    // If this was a pinned video that lost its pinning (orphan), unpin it too.
+    const shouldUnpin = prev.pinned && !honoredPinnedIds.has(id);
+    if (
+      prev.scheduled_at === val.scheduled_at &&
+      prev.queue_position === val.queue_position &&
+      !shouldUnpin
+    ) {
       continue;
     }
-    updates.push(
-      supabase
-        .from("videos")
-        .update({
-          scheduled_at: val.scheduled_at,
-          queue_position: val.queue_position,
-        })
-        .eq("id", id),
-    );
+    const update: {
+      scheduled_at: string;
+      queue_position: number;
+      pinned?: boolean;
+    } = {
+      scheduled_at: val.scheduled_at,
+      queue_position: val.queue_position,
+    };
+    if (shouldUnpin) update.pinned = false;
+    updates.push(supabase.from("videos").update(update).eq("id", id));
   }
 
   if (updates.length > 0) {

@@ -13,7 +13,7 @@ import {
   type Slot,
 } from "@/lib/scheduling";
 import { getWorkspaceSchedule } from "@/lib/workspace-schedule";
-import { markPosted, moveVideoToSlot, skipVideo, type QueueVideo } from "@/lib/queue";
+import { markPosted, moveVideoToSlot, recomputeQueue, skipVideo, type QueueVideo } from "@/lib/queue";
 import { getMyRole, getWorkspace, type Workspace } from "@/lib/workspaces";
 import { generateCaption, buildYouTube } from "@/lib/captions";
 import { Button } from "@/components/ui/button";
@@ -202,6 +202,16 @@ function DayList({
     });
   }, [dKey, videos, wsSlots]);
 
+  // Orphan videos: scheduled for this day but NOT matching any configured slot
+  // (e.g., schedule was changed after the video was scheduled). We show them
+  // separately so the user can see them and reorganize the queue.
+  const orphanVideos = useMemo(() => {
+    const validKeys = new Set(slotView.map((s) => slotKey(s.iso)));
+    return videos.filter(
+      (v) => v.scheduled_at && !validKeys.has(slotKey(v.scheduled_at)),
+    );
+  }, [videos, slotView]);
+
   async function handlePosted(id: string) {
     setBusyId(id);
     try {
@@ -294,43 +304,85 @@ function DayList({
       {loading ? (
         <p className="text-center text-sm text-muted-foreground">Carregando...</p>
       ) : (
-        <div className="space-y-2">
-          {slotView.map(({ iso, label, video, slotIsPast }) => {
-            if (video) {
-              const isExpanded = expandedId === video.id;
+        <>
+          {orphanVideos.length > 0 && (
+            <div className="glass mb-3 rounded-2xl border border-destructive/40 bg-destructive/10 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-display text-sm font-bold text-destructive">
+                    {orphanVideos.length} {orphanVideos.length === 1 ? "vídeo fora" : "vídeos fora"} dos horários atuais
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    A estratégia mudou depois que esses vídeos foram agendados. Reorganize a fila para encaixar nos novos horários.
+                  </p>
+                </div>
+                {canEdit && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-destructive/60 text-destructive hover:bg-destructive/20"
+                    onClick={async () => {
+                      try {
+                        await recomputeQueue(workspaceId);
+                        toast.success("Fila reorganizada");
+                        await load();
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : "Erro");
+                      }
+                    }}
+                  >
+                    Reorganizar fila
+                  </Button>
+                )}
+              </div>
+              <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                {orphanVideos.map((v) => (
+                  <li key={v.id}>
+                    • {v.scheduled_at ? slotLabelForDate(v.scheduled_at) : "--:--"} —{" "}
+                    {(v.yt_title || v.base_text || "Sem título").split("\n")[0].slice(0, 60)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="space-y-2">
+            {slotView.map(({ iso, label, video, slotIsPast }) => {
+              if (video) {
+                const isExpanded = expandedId === video.id;
+                return (
+                  <VideoSlotItem
+                    key={iso}
+                    video={video}
+                    expanded={isExpanded}
+                    onToggle={() => handleToggleExpand(video)}
+                    playbackUrl={isExpanded ? signedUrls[video.id] ?? "" : ""}
+                    busy={busyId === video.id}
+                    canEdit={canEdit && !isPast}
+                    onPosted={() => handlePosted(video.id)}
+                    onSkip={() => handleSkip(video.id)}
+                    onMove={(targetIso) => handleMove(video.id, targetIso)}
+                    onTogglePin={() => handleTogglePin(video.id, video.pinned)}
+                    onEdit={() => setEditingId(video.id)}
+                    workspaceId={workspaceId}
+                  />
+                );
+              }
+              // Empty slot
+              const showAdd = canEdit && !slotIsPast && !isPast;
               return (
-                <VideoSlotItem
+                <EmptySlotCard
                   key={iso}
-                  video={video}
-                  expanded={isExpanded}
-                  onToggle={() => handleToggleExpand(video)}
-                  playbackUrl={isExpanded ? signedUrls[video.id] ?? "" : ""}
-                  busy={busyId === video.id}
-                  canEdit={canEdit && !isPast}
-                  onPosted={() => handlePosted(video.id)}
-                  onSkip={() => handleSkip(video.id)}
-                  onMove={(targetIso) => handleMove(video.id, targetIso)}
-                  onTogglePin={() => handleTogglePin(video.id, video.pinned)}
-                  onEdit={() => setEditingId(video.id)}
+                  label={label}
                   workspaceId={workspaceId}
+                  slotIso={iso}
+                  isToday={isToday}
+                  slotIsPast={slotIsPast}
+                  showAdd={showAdd}
                 />
               );
-            }
-            // Empty slot
-            const showAdd = canEdit && !slotIsPast && !isPast;
-            return (
-              <EmptySlotCard
-                key={iso}
-                label={label}
-                workspaceId={workspaceId}
-                slotIso={iso}
-                isToday={isToday}
-                slotIsPast={slotIsPast}
-                showAdd={showAdd}
-              />
-            );
-          })}
-        </div>
+            })}
+          </div>
+        </>
       )}
 
       <EditPostDialog
