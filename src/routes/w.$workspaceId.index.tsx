@@ -39,6 +39,7 @@ type DayVideo = {
   status: "pending" | "posted" | "skipped";
   scheduled_at: string;
   pinned: boolean;
+  title: string;
 };
 
 type DaySummary = {
@@ -158,7 +159,7 @@ function Calendar({
 
       const { data } = await supabase
         .from("videos")
-        .select("id, status, scheduled_at, pinned")
+        .select("id, status, scheduled_at, pinned, yt_title, base_text, caption")
         .eq("workspace_id", workspaceId)
         .not("scheduled_at", "is", null)
         .gte("scheduled_at", start.toISOString())
@@ -182,6 +183,7 @@ function Calendar({
           status: v.status as DayVideo["status"],
           scheduled_at: v.scheduled_at,
           pinned: !!v.pinned,
+          title: (v.yt_title || v.base_text || v.caption || "Sem título").split("\n")[0],
         });
         map[k] = cur;
       });
@@ -211,6 +213,7 @@ function Calendar({
   }, [cursor.getFullYear(), cursor.getMonth()]);
 
   const todayK = dayKey(new Date());
+  const todaySummary = byDay[todayK];
 
   function handleDragStart(e: DragStartEvent) {
     const id = String(e.active.id);
@@ -348,11 +351,7 @@ function Calendar({
           </div>
         )}
 
-        {canDrag && (
-          <p className="mb-3 text-center text-[11px] text-muted-foreground">
-            Dica: arraste um post pra outro dia para reagendar.
-          </p>
-        )}
+        <TodayPreview summary={todaySummary} loading={loading} />
 
         <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
           {["D", "S", "T", "Q", "Q", "S", "S"].map((d, i) => (
@@ -362,7 +361,7 @@ function Calendar({
           ))}
         </div>
 
-        <div className="grid grid-cols-7 gap-1">
+        <div className="grid grid-cols-7 gap-2">
           {grid.map((d) => {
             const k = dayKey(d);
             const summary = byDay[k];
@@ -370,9 +369,9 @@ function Calendar({
             const isToday = k === todayK;
             const isPast = k < todayK;
             const hasItems = summary && summary.total > 0;
-            const clickable = !isPast && (inMonth || hasItems);
+            const clickable = (inMonth || hasItems) && !activeDrag;
             const isOverThis = overDay === k;
-            const isFull = (summary?.pending ?? 0) >= 3;
+            const isFull = false;
             const dropEligible = !isPast && !!activeDrag;
             const invalidDrop =
               isOverThis &&
@@ -406,9 +405,12 @@ function Calendar({
           </p>
         )}
 
-        <div className="mt-8 flex items-center justify-center gap-4 text-[11px] text-muted-foreground">
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-4 text-[11px] text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <span className="grad-bg h-2 w-2 rounded-full" /> Pendente
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="bg-destructive h-2 w-2 rounded-full" /> Atrasado
           </div>
           <div className="flex items-center gap-1.5">
             <span className="bg-success h-2 w-2 rounded-full" /> Postado
