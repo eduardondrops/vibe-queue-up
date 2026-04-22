@@ -13,7 +13,7 @@ import {
   type Slot,
 } from "@/lib/scheduling";
 import { getWorkspaceSchedule } from "@/lib/workspace-schedule";
-import { markPosted, moveVideoToSlot, recomputeQueue, skipVideo, type QueueVideo } from "@/lib/queue";
+import { markPosted, moveVideoToSlot, postponeOverdueVideo, recomputeQueue, type QueueVideo } from "@/lib/queue";
 import { getMyRole, getWorkspace, type Workspace } from "@/lib/workspaces";
 import { generateCaption, buildYouTube } from "@/lib/captions";
 import { Button } from "@/components/ui/button";
@@ -228,8 +228,8 @@ function DayList({
   async function handleSkip(id: string) {
     setBusyId(id);
     try {
-      await skipVideo(id, workspaceId);
-      toast.success("Vídeo movido para o fim da fila");
+      await postponeOverdueVideo(id, workspaceId);
+      toast.success("Fila empurrada para o próximo horário disponível");
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro");
@@ -349,6 +349,7 @@ function DayList({
             {slotView.map(({ iso, label, video, slotIsPast }) => {
               if (video) {
                 const isExpanded = expandedId === video.id;
+                const isOverdue = video.status === "pending" && slotIsPast;
                 return (
                   <VideoSlotItem
                     key={iso}
@@ -357,7 +358,8 @@ function DayList({
                     onToggle={() => handleToggleExpand(video)}
                     playbackUrl={isExpanded ? signedUrls[video.id] ?? "" : ""}
                     busy={busyId === video.id}
-                    canEdit={canEdit && !isPast}
+                    canEdit={canEdit}
+                    isOverdue={isOverdue}
                     onPosted={() => handlePosted(video.id)}
                     onSkip={() => handleSkip(video.id)}
                     onMove={(targetIso) => handleMove(video.id, targetIso)}
