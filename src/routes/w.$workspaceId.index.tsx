@@ -570,6 +570,52 @@ function CalendarCell({
   return cell;
 }
 
+function TodayPreview({
+  summary,
+  loading,
+}: {
+  summary: DaySummary | undefined;
+  loading: boolean;
+}) {
+  const videos = summary?.videos ?? [];
+  return (
+    <div className="glass mb-5 rounded-2xl border border-border/70 bg-surface/70 p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">Hoje</p>
+          <h2 className="font-display text-lg font-bold">Postagens do dia</h2>
+        </div>
+        <span className="rounded-full bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary">
+          {loading ? "..." : `${videos.length} ${videos.length === 1 ? "post" : "posts"}`}
+        </span>
+      </div>
+      {videos.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nenhuma postagem agendada para hoje.</p>
+      ) : (
+        <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+          {videos.map((video) => {
+            const isOverdue = video.status === "pending" && new Date(video.scheduled_at).getTime() <= Date.now();
+            return (
+              <div key={video.id} className="rounded-xl border border-border bg-background/60 p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="font-display text-sm font-bold">{slotLabelForDate(video.scheduled_at)}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${isOverdue ? "bg-destructive/15 text-destructive" : video.status === "posted" ? "bg-success/15 text-success" : "bg-primary/15 text-primary"}`}>
+                    {isOverdue ? "Atrasado" : video.status === "posted" ? "Postado" : "Pendente"}
+                  </span>
+                </div>
+                <p className="line-clamp-2 text-sm text-foreground">{video.title}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <p className="mt-3 text-[11px] text-muted-foreground">
+        Arraste posts entre os dias do calendário para organizar a fila.
+      </p>
+    </div>
+  );
+}
+
 function DraggablePostBadge({
   videoId,
   fromDay,
