@@ -479,6 +479,7 @@ function VideoSlotItem({
   workspaceId,
   onPosted,
   onSkip,
+  onDelete,
   onMove,
   onTogglePin,
   onEdit,
@@ -493,6 +494,7 @@ function VideoSlotItem({
   workspaceId: string;
   onPosted: () => void;
   onSkip: () => void;
+  onDelete: () => void;
   onMove: (targetIso: string) => void;
   onTogglePin: () => void;
   onEdit: () => void;
@@ -644,6 +646,16 @@ function VideoSlotItem({
                   >
                     <SkipForward className="mr-1 h-4 w-4" /> {isOverdue ? "Não, reagendar" : "Pular"}
                   </Button>
+                  {isOverdue && (
+                    <Button
+                      onClick={onDelete}
+                      disabled={busy}
+                      variant="outline"
+                      className="border-destructive/50 text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="mr-1 h-4 w-4" /> Excluir
+                    </Button>
+                  )}
                 </div>
 
                 {!isOverdue && (
