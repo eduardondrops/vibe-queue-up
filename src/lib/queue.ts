@@ -338,6 +338,19 @@ export async function postponeOverdueVideo(
   id: string,
   workspaceId: string,
 ): Promise<void> {
+  const now = new Date().toISOString();
+
+  // The overdue video becomes first in the floating queue, and future posts
+  // become floating too so the whole line shifts backward from the next slot.
+  const { error: futureError } = await supabase
+    .from("videos")
+    .update({ pinned: false })
+    .eq("workspace_id", workspaceId)
+    .eq("status", "pending")
+    .not("scheduled_at", "is", null)
+    .gte("scheduled_at", now);
+  if (futureError) throw futureError;
+
   const { error } = await supabase
     .from("videos")
     .update({ pinned: false })
