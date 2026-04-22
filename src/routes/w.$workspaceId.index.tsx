@@ -214,6 +214,18 @@ function Calendar({
 
   const todayK = dayKey(new Date());
   const todaySummary = byDay[todayK];
+  const progress = useMemo(() => {
+    const monthPrefix = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
+    return Object.entries(byDay).reduce(
+      (acc, [key, summary]) => {
+        if (!key.startsWith(monthPrefix)) return acc;
+        acc.posted += summary.posted;
+        acc.remaining += summary.videos.filter((v) => v.status === "pending").length;
+        return acc;
+      },
+      { posted: 0, remaining: 0 },
+    );
+  }, [byDay, cursor.getFullYear(), cursor.getMonth()]);
 
   function handleDragStart(e: DragStartEvent) {
     const id = String(e.active.id);
@@ -295,7 +307,10 @@ function Calendar({
       }}
     >
       <div>
-        <PostingHealthCard workspaceId={workspaceId} />
+        <div className="mb-6 grid gap-3 xl:grid-cols-[1fr_18rem]">
+          <PostingHealthCard workspaceId={workspaceId} />
+          <WorkspaceProgressCard posted={progress.posted} remaining={progress.remaining} />
+        </div>
         <div className="mb-6 flex items-end justify-between">
           <div>
             <p className="text-xs uppercase tracking-widest text-muted-foreground">
