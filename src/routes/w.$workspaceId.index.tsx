@@ -475,7 +475,7 @@ function CalendarCell({
     canDrag && !isPast && firstPending ? firstPending : null;
 
   const baseClasses =
-    "relative flex aspect-square flex-col items-center justify-start rounded-xl border p-1.5 text-xs transition-all";
+    "relative flex min-h-[8.25rem] flex-col items-stretch justify-start rounded-xl border p-2 text-xs transition-all";
 
   let stateClasses = "";
   if (!inMonth) {
@@ -484,7 +484,7 @@ function CalendarCell({
   } else if (isToday) {
     stateClasses =
       "border-success/60 bg-success text-success-foreground ring-2 ring-success/70 ring-offset-2 ring-offset-background shadow-[0_8px_24px_-8px_oklch(0.72_0.18_155/0.6)]";
-  } else if (isPast) {
+  } else if (isPast && !hasItems) {
     stateClasses =
       "border-border/40 bg-muted/40 text-muted-foreground opacity-50 cursor-not-allowed";
   } else {
@@ -524,36 +524,23 @@ function CalendarCell({
         {d.getDate()}
       </span>
       {hasItems && (
-        <div className="mt-auto flex w-full flex-col items-center gap-0.5">
-          {draggableVideo ? (
-            <DraggablePostBadge
-              videoId={draggableVideo.id}
-              fromDay={k}
-              count={summary!.total}
-              isToday={isToday}
-              isPastInMonth={isPast && inMonth}
-              isHigh={summary!.total >= 3}
-              isBeingDragged={draggingId === draggableVideo.id}
-            />
-          ) : (
-            <span
-              className={`inline-flex min-w-[1.5rem] items-center justify-center rounded-md px-1.5 py-0.5 font-display text-sm font-bold leading-none ${
-                isToday
-                  ? "bg-success-foreground/20 text-success-foreground"
-                  : isPast && inMonth
-                    ? "bg-muted-foreground/15 text-muted-foreground"
-                    : (summary!.total >= 3)
-                      ? "grad-bg text-primary-foreground shadow-[0_4px_12px_-4px_oklch(0.68_0.26_358/0.5)]"
-                      : "bg-primary/15 text-primary"
-              }`}
-            >
-              {summary!.total}
-            </span>
-          )}
-          {summary!.pending > 0 && !isPast && !isToday && (
-            <span className="text-[9px] text-muted-foreground">
-              {summary!.pending} pend.
-            </span>
+        <div className="mt-2 flex w-full flex-1 flex-col gap-1 overflow-hidden">
+          {summary!.videos.slice(0, 4).map((video) => {
+            const isOverdue = video.status === "pending" && new Date(video.scheduled_at).getTime() <= Date.now();
+            return canDrag && video.status === "pending" && !isPast ? (
+              <DraggablePostBadge
+                key={video.id}
+                video={video}
+                fromDay={k}
+                isOverdue={isOverdue}
+                isBeingDragged={draggingId === video.id}
+              />
+            ) : (
+              <PostMiniRow key={video.id} video={video} isOverdue={isOverdue} />
+            );
+          })}
+          {summary!.videos.length > 4 && (
+            <span className="text-[10px] text-muted-foreground">+{summary!.videos.length - 4} posts</span>
           )}
         </div>
       )}
