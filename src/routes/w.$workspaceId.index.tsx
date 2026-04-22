@@ -39,6 +39,7 @@ type DayVideo = {
   status: "pending" | "posted" | "skipped";
   scheduled_at: string;
   pinned: boolean;
+  title: string;
 };
 
 type DaySummary = {
@@ -158,7 +159,7 @@ function Calendar({
 
       const { data } = await supabase
         .from("videos")
-        .select("id, status, scheduled_at, pinned")
+        .select("id, status, scheduled_at, pinned, yt_title, base_text, caption")
         .eq("workspace_id", workspaceId)
         .not("scheduled_at", "is", null)
         .gte("scheduled_at", start.toISOString())
@@ -182,6 +183,7 @@ function Calendar({
           status: v.status as DayVideo["status"],
           scheduled_at: v.scheduled_at,
           pinned: !!v.pinned,
+          title: (v.yt_title || v.base_text || v.caption || "Sem título").split("\n")[0],
         });
         map[k] = cur;
       });
@@ -211,6 +213,7 @@ function Calendar({
   }, [cursor.getFullYear(), cursor.getMonth()]);
 
   const todayK = dayKey(new Date());
+  const todaySummary = byDay[todayK];
 
   function handleDragStart(e: DragStartEvent) {
     const id = String(e.active.id);
@@ -348,11 +351,7 @@ function Calendar({
           </div>
         )}
 
-        {canDrag && (
-          <p className="mb-3 text-center text-[11px] text-muted-foreground">
-            Dica: arraste um post pra outro dia para reagendar.
-          </p>
-        )}
+        <TodayPreview summary={todaySummary} loading={loading} />
 
         <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
           {["D", "S", "T", "Q", "Q", "S", "S"].map((d, i) => (
@@ -362,7 +361,7 @@ function Calendar({
           ))}
         </div>
 
-        <div className="grid grid-cols-7 gap-1">
+        <div className="grid grid-cols-7 gap-2">
           {grid.map((d) => {
             const k = dayKey(d);
             const summary = byDay[k];
@@ -370,9 +369,9 @@ function Calendar({
             const isToday = k === todayK;
             const isPast = k < todayK;
             const hasItems = summary && summary.total > 0;
-            const clickable = !isPast && (inMonth || hasItems);
+            const clickable = (inMonth || hasItems) && !activeDrag;
             const isOverThis = overDay === k;
-            const isFull = (summary?.pending ?? 0) >= 3;
+            const isFull = false;
             const dropEligible = !isPast && !!activeDrag;
             const invalidDrop =
               isOverThis &&
@@ -406,9 +405,12 @@ function Calendar({
           </p>
         )}
 
-        <div className="mt-8 flex items-center justify-center gap-4 text-[11px] text-muted-foreground">
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-4 text-[11px] text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <span className="grad-bg h-2 w-2 rounded-full" /> Pendente
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="bg-destructive h-2 w-2 rounded-full" /> Atrasado
           </div>
           <div className="flex items-center gap-1.5">
             <span className="bg-success h-2 w-2 rounded-full" /> Postado
@@ -473,7 +475,7 @@ function CalendarCell({
     canDrag && !isPast && firstPending ? firstPending : null;
 
   const baseClasses =
-    "relative flex aspect-square flex-col items-center justify-start rounded-xl border p-1.5 text-xs transition-all";
+    "relative flex min-h-[8.25rem] flex-col items-stretch justify-start rounded-xl border p-2 text-xs transition-all";
 
   let stateClasses = "";
   if (!inMonth) {
@@ -482,7 +484,7 @@ function CalendarCell({
   } else if (isToday) {
     stateClasses =
       "border-success/60 bg-success text-success-foreground ring-2 ring-success/70 ring-offset-2 ring-offset-background shadow-[0_8px_24px_-8px_oklch(0.72_0.18_155/0.6)]";
-  } else if (isPast) {
+  } else if (isPast && !hasItems) {
     stateClasses =
       "border-border/40 bg-muted/40 text-muted-foreground opacity-50 cursor-not-allowed";
   } else {
@@ -522,36 +524,23 @@ function CalendarCell({
         {d.getDate()}
       </span>
       {hasItems && (
-        <div className="mt-auto flex w-full flex-col items-center gap-0.5">
-          {draggableVideo ? (
-            <DraggablePostBadge
-              videoId={draggableVideo.id}
-              fromDay={k}
-              count={summary!.total}
-              isToday={isToday}
-              isPastInMonth={isPast && inMonth}
-              isHigh={summary!.total >= 3}
-              isBeingDragged={draggingId === draggableVideo.id}
-            />
-          ) : (
-            <span
-              className={`inline-flex min-w-[1.5rem] items-center justify-center rounded-md px-1.5 py-0.5 font-display text-sm font-bold leading-none ${
-                isToday
-                  ? "bg-success-foreground/20 text-success-foreground"
-                  : isPast && inMonth
-                    ? "bg-muted-foreground/15 text-muted-foreground"
-                    : (summary!.total >= 3)
-                      ? "grad-bg text-primary-foreground shadow-[0_4px_12px_-4px_oklch(0.68_0.26_358/0.5)]"
-                      : "bg-primary/15 text-primary"
-              }`}
-            >
-              {summary!.total}
-            </span>
-          )}
-          {summary!.pending > 0 && !isPast && !isToday && (
-            <span className="text-[9px] text-muted-foreground">
-              {summary!.pending} pend.
-            </span>
+        <div className="mt-2 flex w-full flex-1 flex-col gap-1 overflow-hidden">
+          {summary!.videos.slice(0, 4).map((video) => {
+            const isOverdue = video.status === "pending" && new Date(video.scheduled_at).getTime() <= Date.now();
+            return canDrag && video.status === "pending" ? (
+              <DraggablePostBadge
+                key={video.id}
+                video={video}
+                fromDay={k}
+                isOverdue={isOverdue}
+                isBeingDragged={draggingId === video.id}
+              />
+            ) : (
+              <PostMiniRow key={video.id} video={video} isOverdue={isOverdue} />
+            );
+          })}
+          {summary!.videos.length > 4 && (
+            <span className="text-[10px] text-muted-foreground">+{summary!.videos.length - 4} posts</span>
           )}
         </div>
       )}
@@ -568,25 +557,84 @@ function CalendarCell({
   return cell;
 }
 
+function TodayPreview({
+  summary,
+  loading,
+}: {
+  summary: DaySummary | undefined;
+  loading: boolean;
+}) {
+  const videos = summary?.videos ?? [];
+  return (
+    <div className="glass mb-5 rounded-2xl border border-border/70 bg-surface/70 p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">Hoje</p>
+          <h2 className="font-display text-lg font-bold">Postagens do dia</h2>
+        </div>
+        <span className="rounded-full bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary">
+          {loading ? "..." : `${videos.length} ${videos.length === 1 ? "post" : "posts"}`}
+        </span>
+      </div>
+      {videos.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nenhuma postagem agendada para hoje.</p>
+      ) : (
+        <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+          {videos.map((video) => {
+            const isOverdue = video.status === "pending" && new Date(video.scheduled_at).getTime() <= Date.now();
+            return (
+              <div key={video.id} className="rounded-xl border border-border bg-background/60 p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="font-display text-sm font-bold">{slotLabelForDate(video.scheduled_at)}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${isOverdue ? "bg-destructive/15 text-destructive" : video.status === "posted" ? "bg-success/15 text-success" : "bg-primary/15 text-primary"}`}>
+                    {isOverdue ? "Atrasado" : video.status === "posted" ? "Postado" : "Pendente"}
+                  </span>
+                </div>
+                <p className="line-clamp-2 text-sm text-foreground">{video.title}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <p className="mt-3 text-[11px] text-muted-foreground">
+        Arraste posts entre os dias do calendário para organizar a fila.
+      </p>
+    </div>
+  );
+}
+
+function PostMiniRow({ video, isOverdue }: { video: DayVideo; isOverdue: boolean }) {
+  const tone = isOverdue
+    ? "border-destructive/40 bg-destructive/10 text-destructive"
+    : video.status === "posted"
+      ? "border-success/40 bg-success/10 text-success"
+      : "border-primary/30 bg-primary/10 text-primary";
+
+  return (
+    <div className={`min-w-0 rounded-lg border px-2 py-1 ${tone}`}>
+      <div className="flex items-center gap-1.5">
+        <span className="shrink-0 font-display text-[11px] font-bold">
+          {slotLabelForDate(video.scheduled_at)}
+        </span>
+        <span className="truncate text-[11px] text-foreground/85">{video.title}</span>
+      </div>
+    </div>
+  );
+}
+
 function DraggablePostBadge({
-  videoId,
+  video,
   fromDay,
-  count,
-  isToday,
-  isPastInMonth,
-  isHigh,
+  isOverdue,
   isBeingDragged,
 }: {
-  videoId: string;
+  video: DayVideo;
   fromDay: string;
-  count: number;
-  isToday: boolean;
-  isPastInMonth: boolean;
-  isHigh: boolean;
+  isOverdue: boolean;
   isBeingDragged: boolean;
 }) {
   const { attributes, listeners, setNodeRef } = useDraggable({
-    id: videoId,
+    id: video.id,
     data: { fromDay },
   });
 
@@ -597,18 +645,16 @@ function DraggablePostBadge({
       {...attributes}
       type="button"
       onClick={(e) => e.preventDefault()}
-      className={`inline-flex min-w-[1.5rem] cursor-grab touch-none items-center justify-center rounded-md px-1.5 py-0.5 font-display text-sm font-bold leading-none transition-opacity active:cursor-grabbing ${
-        isToday
-          ? "bg-success-foreground/20 text-success-foreground"
-          : isPastInMonth
-            ? "bg-muted-foreground/15 text-muted-foreground"
-            : isHigh
-              ? "grad-bg text-primary-foreground shadow-[0_4px_12px_-4px_oklch(0.68_0.26_358/0.5)]"
-              : "bg-primary/15 text-primary"
+      className={`flex min-w-0 cursor-grab touch-none items-center gap-1 rounded-lg border px-2 py-1 text-left leading-none transition-opacity active:cursor-grabbing ${
+        isOverdue
+          ? "border-destructive/50 bg-destructive/15 text-destructive"
+          : "border-primary/35 bg-primary/10 text-primary"
       } ${isBeingDragged ? "opacity-30" : ""}`}
       aria-label={`Arrastar post de ${fromDay}`}
     >
-      {count}
+      <GripVertical className="h-3 w-3 shrink-0" />
+      <span className="shrink-0 font-display text-[11px] font-bold">{slotLabelForDate(video.scheduled_at)}</span>
+      <span className="truncate text-[11px] text-foreground/85">{video.title}</span>
     </button>
   );
 }
