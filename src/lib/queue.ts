@@ -318,11 +318,22 @@ export async function moveVideoToDay(
 
 /** Mark as posted and stamp posted_at. */
 export async function markPosted(id: string): Promise<void> {
+  const { data: video, error: loadError } = await supabase
+    .from("videos")
+    .select("workspace_id")
+    .eq("id", id)
+    .single();
+  if (loadError) throw loadError;
+
   const { error } = await supabase
     .from("videos")
     .update({ status: "posted", posted_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw error;
+
+  if (video?.workspace_id) {
+    await recomputeQueue(video.workspace_id);
+  }
 }
 
 /** Delete a video row and its stored file. */
