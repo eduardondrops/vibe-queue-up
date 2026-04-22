@@ -35,12 +35,16 @@ type PendingRow = {
  * Algorithm:
  * 1. Load all pending rows with their current scheduled_at + pinned flag.
  * 2. Generate the upcoming slot timeline (SP, 3 per day, future only).
- * 3. Reserve slots used by pinned videos.
- * 4. Sort the non-pinned by their previous scheduled_at (then created_at).
- * 5. Assign each non-pinned video to the next free upcoming slot.
+ * 3. Keep overdue videos exactly where they are until the user confirms.
+ * 4. Reserve slots used by pinned videos.
+ * 5. Sort the non-pinned by their previous scheduled_at (then created_at).
+ * 6. Assign each non-pinned video to the next free upcoming slot.
  * 6. Persist updates only for rows whose scheduled_at or queue_position changed.
  */
-export async function recomputeQueue(workspaceId: string): Promise<void> {
+export async function recomputeQueue(
+  workspaceId: string,
+  options: { reflowOverdueIds?: Set<string> } = {},
+): Promise<void> {
   const { data, error } = await supabase
     .from("videos")
     .select("id, scheduled_at, pinned, created_at, queue_position")
@@ -59,6 +63,7 @@ export async function recomputeQueue(workspaceId: string): Promise<void> {
   // A pinned video is only honored if its slot still matches a configured slot
   // AND is in the future. Otherwise it becomes floating (orphan after schedule
   // changes / past slot that never got posted).
+  const overdueKept: typeof rows = [];
   const pinnedHonored: typeof rows = [];
   const orphans: typeof rows = [];
   for (const r of rows) {
@@ -68,7 +73,10 @@ export async function recomputeQueue(workspaceId: string): Promise<void> {
     }
     const k = slotKey(r.scheduled_at);
     const isFuture = new Date(r.scheduled_at).getTime() > Date.now();
-    if (r.pinned && validSlotKeys.has(k) && isFuture) {
+    const shouldReflowOverdue = options.reflowOverdueIds?.has(r.id) ?? false;
+    if (!isFuture && !shouldReflowOverdue) {
+      overdueKept.push(r);
+    } else if (r.pinned && validSlotKeys.has(k) && isFuture) {
       pinnedHonored.push(r);
       reserved.add(k);
     } else if (!r.pinned && validSlotKeys.has(k) && isFuture) {
@@ -91,6 +99,16 @@ export async function recomputeQueue(workspaceId: string): Promise<void> {
 
   const assignments = new Map<string, { scheduled_at: string; queue_position: number }>();
   let cursor = 0;
+
+  // Overdue videos stay visible in their original slot until the user answers
+  // whether that post was actually published.
+  for (const overdue of overdueKept) {
+    if (!overdue.scheduled_at) continue;
+    assignments.set(overdue.id, {
+      scheduled_at: overdue.scheduled_at,
+      queue_position: 0,
+    });
+  }
 
   // Pinned ones keep their slot.
   for (const p of pinned) {
@@ -127,7 +145,7 @@ export async function recomputeQueue(workspaceId: string): Promise<void> {
 
   // Persist only changed rows.
   const byId = new Map(rows.map((r) => [r.id, r]));
-  const honoredPinnedIds = new Set(pinned.map((p) => p.id));
+  const honoredPinnedIds = new Set([...pinned, ...overdueKept].map((p) => p.id));
   const updates: Array<PromiseLike<unknown>> = [];
   for (const [id, val] of assignments) {
     const prev = byId.get(id);
