@@ -156,7 +156,7 @@ async function computeHealthForWorkspace(workspaceId: string): Promise<WsHealth>
     message = `${scheduledNext7} ${scheduledNext7 === 1 ? "post agendado" : "posts agendados"}`;
   } else if (daysSinceLastPost !== null && daysSinceLastPost >= 2 && score < 0.85) {
     status = "warning";
-    message = `Você está há ${daysSinceLastPost} dia${daysSinceLastPost === 1 ? "" : "s"} sem postar nesse perfil`;
+    message = "Existem postagens atrasadas ou lacunas na rotina deste perfil";
   } else if (score >= 0.85) {
     status = "excellent";
     message = "Sua frequência de postagens está excelente";
@@ -165,10 +165,7 @@ async function computeHealthForWorkspace(workspaceId: string): Promise<WsHealth>
     message = "Sua frequência de postagens está boa";
   } else {
     status = "warning";
-    message =
-      daysSinceLastPost !== null
-        ? `Você está há ${daysSinceLastPost} dia${daysSinceLastPost === 1 ? "" : "s"} sem postar nesse perfil`
-        : "Sua frequência de postagens está baixa";
+    message = "Existem postagens atrasadas ou lacunas na rotina deste perfil";
   }
 
   return {
