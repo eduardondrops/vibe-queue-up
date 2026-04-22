@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, TrendingUp, CheckCircle2, AlertTriangle, Sparkles } from "lucide-react";
+import { Loader2, TrendingUp, CheckCircle2, AlertTriangle, Sparkles, Target } from "lucide-react";
 import { getPostingHealth, type PostingHealth } from "@/lib/posting-health";
 
 const STATUS_STYLES: Record<
@@ -84,6 +84,22 @@ export function PostingHealthCard({ workspaceId }: { workspaceId: string }) {
           >
             {style.label}
           </span>
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-[auto_1fr] sm:items-center">
+          <div className="inline-flex items-center gap-2 rounded-xl border border-border/70 bg-background/45 px-3 py-2">
+            <Target className={`h-4 w-4 ${style.icon}`} />
+            <span className="font-display text-lg font-bold tabular-nums">
+              {data.postedLast7}/{Math.max(data.expectedLast7, data.postedLast7 + data.scheduledNext7)}
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-background/60">
+            <div
+              className="h-full rounded-full bg-success transition-all"
+              style={{
+                width: `${Math.min(100, Math.round((data.postedLast7 / Math.max(1, data.expectedLast7)) * 100))}%`,
+              }}
+            />
+          </div>
         </div>
         {data.status === "idle" ? (
           <p className="mt-1.5 text-xs text-muted-foreground">
