@@ -527,7 +527,7 @@ function CalendarCell({
         <div className="mt-2 flex w-full flex-1 flex-col gap-1 overflow-hidden">
           {summary!.videos.slice(0, 4).map((video) => {
             const isOverdue = video.status === "pending" && new Date(video.scheduled_at).getTime() <= Date.now();
-            return canDrag && video.status === "pending" && !isPast ? (
+            return canDrag && video.status === "pending" ? (
               <DraggablePostBadge
                 key={video.id}
                 video={video}
@@ -603,25 +603,38 @@ function TodayPreview({
   );
 }
 
+function PostMiniRow({ video, isOverdue }: { video: DayVideo; isOverdue: boolean }) {
+  const tone = isOverdue
+    ? "border-destructive/40 bg-destructive/10 text-destructive"
+    : video.status === "posted"
+      ? "border-success/40 bg-success/10 text-success"
+      : "border-primary/30 bg-primary/10 text-primary";
+
+  return (
+    <div className={`min-w-0 rounded-lg border px-2 py-1 ${tone}`}>
+      <div className="flex items-center gap-1.5">
+        <span className="shrink-0 font-display text-[11px] font-bold">
+          {slotLabelForDate(video.scheduled_at)}
+        </span>
+        <span className="truncate text-[11px] text-foreground/85">{video.title}</span>
+      </div>
+    </div>
+  );
+}
+
 function DraggablePostBadge({
-  videoId,
+  video,
   fromDay,
-  count,
-  isToday,
-  isPastInMonth,
-  isHigh,
+  isOverdue,
   isBeingDragged,
 }: {
-  videoId: string;
+  video: DayVideo;
   fromDay: string;
-  count: number;
-  isToday: boolean;
-  isPastInMonth: boolean;
-  isHigh: boolean;
+  isOverdue: boolean;
   isBeingDragged: boolean;
 }) {
   const { attributes, listeners, setNodeRef } = useDraggable({
-    id: videoId,
+    id: video.id,
     data: { fromDay },
   });
 
@@ -632,18 +645,16 @@ function DraggablePostBadge({
       {...attributes}
       type="button"
       onClick={(e) => e.preventDefault()}
-      className={`inline-flex min-w-[1.5rem] cursor-grab touch-none items-center justify-center rounded-md px-1.5 py-0.5 font-display text-sm font-bold leading-none transition-opacity active:cursor-grabbing ${
-        isToday
-          ? "bg-success-foreground/20 text-success-foreground"
-          : isPastInMonth
-            ? "bg-muted-foreground/15 text-muted-foreground"
-            : isHigh
-              ? "grad-bg text-primary-foreground shadow-[0_4px_12px_-4px_oklch(0.68_0.26_358/0.5)]"
-              : "bg-primary/15 text-primary"
+      className={`flex min-w-0 cursor-grab touch-none items-center gap-1 rounded-lg border px-2 py-1 text-left leading-none transition-opacity active:cursor-grabbing ${
+        isOverdue
+          ? "border-destructive/50 bg-destructive/15 text-destructive"
+          : "border-primary/35 bg-primary/10 text-primary"
       } ${isBeingDragged ? "opacity-30" : ""}`}
       aria-label={`Arrastar post de ${fromDay}`}
     >
-      {count}
+      <GripVertical className="h-3 w-3 shrink-0" />
+      <span className="shrink-0 font-display text-[11px] font-bold">{slotLabelForDate(video.scheduled_at)}</span>
+      <span className="truncate text-[11px] text-foreground/85">{video.title}</span>
     </button>
   );
 }
