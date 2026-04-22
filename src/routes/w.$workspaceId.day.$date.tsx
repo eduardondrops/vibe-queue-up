@@ -459,6 +459,7 @@ function VideoSlotItem({
   playbackUrl,
   busy,
   canEdit,
+  isOverdue,
   workspaceId,
   onPosted,
   onSkip,
@@ -472,6 +473,7 @@ function VideoSlotItem({
   playbackUrl: string;
   busy: boolean;
   canEdit: boolean;
+  isOverdue: boolean;
   workspaceId: string;
   onPosted: () => void;
   onSkip: () => void;
@@ -494,9 +496,9 @@ function VideoSlotItem({
 
   const statusMeta = {
     pending: {
-      label: "Não postado",
+      label: isOverdue ? "Atrasado" : "Não postado",
       Icon: CircleDashed,
-      cls: "text-muted-foreground",
+      cls: isOverdue ? "text-destructive" : "text-muted-foreground",
     },
     posted: {
       label: "Postado",
@@ -592,8 +594,18 @@ function VideoSlotItem({
               />
             )}
 
-            {video.status === "pending" && (
+            {video.status === "pending" && canEdit && (
               <>
+                {isOverdue && (
+                  <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm">
+                    <p className="font-display font-bold text-destructive">
+                      Você postou o vídeo “{title}”?
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Se sim, ele será marcado como postado. Se não, a fila será empurrada para o próximo horário livre.
+                    </p>
+                  </div>
+                )}
                 <div className="flex gap-2 pt-1">
                   <Button
                     onClick={onPosted}
@@ -604,7 +616,7 @@ function VideoSlotItem({
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <>
-                        <Check className="mr-1 h-4 w-4" /> Postado
+                        <Check className="mr-1 h-4 w-4" /> {isOverdue ? "Sim, postei" : "Postado"}
                       </>
                     )}
                   </Button>
@@ -614,11 +626,11 @@ function VideoSlotItem({
                     variant="outline"
                     className="flex-1"
                   >
-                    <SkipForward className="mr-1 h-4 w-4" /> Pular
+                    <SkipForward className="mr-1 h-4 w-4" /> {isOverdue ? "Não, reagendar" : "Pular"}
                   </Button>
                 </div>
 
-                {canEdit && (
+                {!isOverdue && (
                   <div className="flex gap-2">
                     <MoveVideoButton
                       workspaceId={workspaceId}
