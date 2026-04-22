@@ -618,6 +618,32 @@ function TodayPreview({
   );
 }
 
+function WorkspaceProgressCard({
+  posted,
+  remaining,
+}: {
+  posted: number;
+  remaining: number;
+}) {
+  const total = posted + remaining;
+  const pct = total > 0 ? Math.round((posted / total) * 100) : 0;
+
+  return (
+    <div className="glass rounded-2xl border border-border/70 bg-surface/70 p-4 shadow-[var(--shadow-card)]">
+      <p className="text-xs uppercase tracking-widest text-muted-foreground">Progresso do mês</p>
+      <div className="mt-2 flex items-end justify-between gap-3">
+        <span className="font-display text-3xl font-bold tabular-nums">{posted}/{total}</span>
+        <span className="rounded-full bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary">
+          {remaining} faltam
+        </span>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-background/70">
+        <div className="h-full rounded-full bg-success transition-all" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
 function PostMiniRow({ video, isOverdue }: { video: DayVideo; isOverdue: boolean }) {
   const tone = isOverdue
     ? "border-destructive/40 bg-destructive/10 text-destructive"
