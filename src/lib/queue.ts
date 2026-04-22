@@ -325,6 +325,23 @@ export async function markPosted(id: string): Promise<void> {
   if (error) throw error;
 }
 
+/** Delete a video row and its stored file. */
+export async function deleteVideo(id: string): Promise<void> {
+  const { data, error: loadError } = await supabase
+    .from("videos")
+    .select("storage_path")
+    .eq("id", id)
+    .single();
+  if (loadError) throw loadError;
+
+  const { error } = await supabase.from("videos").delete().eq("id", id);
+  if (error) throw error;
+
+  if (data?.storage_path) {
+    await supabase.storage.from("videos").remove([data.storage_path]);
+  }
+}
+
 /** Skip: unpin and let recompute push it to the next free slot after others. */
 export async function skipVideo(id: string, workspaceId: string): Promise<void> {
   await postponeOverdueVideo(id, workspaceId);
