@@ -38,6 +38,7 @@ type DayVideo = {
   id: string;
   status: "pending" | "posted" | "skipped";
   scheduled_at: string;
+  storage_path: string;
   pinned: boolean;
   title: string;
 };
@@ -133,6 +134,7 @@ function Calendar({
   );
   const [overDay, setOverDay] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -159,7 +161,7 @@ function Calendar({
 
       const { data } = await supabase
         .from("videos")
-        .select("id, status, scheduled_at, pinned, yt_title, base_text, caption")
+        .select("id, status, scheduled_at, storage_path, pinned, yt_title, base_text, caption")
         .eq("workspace_id", workspaceId)
         .not("scheduled_at", "is", null)
         .gte("scheduled_at", start.toISOString())
@@ -182,6 +184,7 @@ function Calendar({
           id: v.id,
           status: v.status as DayVideo["status"],
           scheduled_at: v.scheduled_at,
+          storage_path: v.storage_path,
           pinned: !!v.pinned,
           title: (v.yt_title || v.base_text || v.caption || "Sem título").split("\n")[0],
         });
@@ -192,6 +195,16 @@ function Calendar({
         d.videos.sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at)),
       );
       setByDay(map);
+      const todaysVideos = map[dayKey(new Date())]?.videos ?? [];
+      const signedEntries = await Promise.all(
+        todaysVideos.map(async (video) => {
+          const { data: signed } = await supabase.storage
+            .from("videos")
+            .createSignedUrl(video.storage_path, 3600);
+          return [video.id, signed?.signedUrl ?? ""] as const;
+        }),
+      );
+      if (!cancel) setPreviewUrls(Object.fromEntries(signedEntries.filter(([, url]) => url)));
       setLoading(false);
     }
     load();
