@@ -498,7 +498,7 @@ function CalendarCell({
       "border-transparent bg-transparent text-muted-foreground/40";
   } else if (isToday) {
     stateClasses =
-      "border-success/60 bg-success text-success-foreground ring-2 ring-success/70 ring-offset-2 ring-offset-background shadow-[0_8px_24px_-8px_oklch(0.72_0.18_155/0.6)]";
+      "border-success/70 bg-surface text-foreground ring-2 ring-success/70 ring-offset-2 ring-offset-background shadow-[0_8px_24px_-8px_oklch(0.72_0.18_155/0.45)]";
   } else if (isPast && !hasItems) {
     stateClasses =
       "border-border/40 bg-muted/40 text-muted-foreground opacity-50 cursor-not-allowed";
@@ -533,7 +533,7 @@ function CalendarCell({
       )}
       <span
         className={`font-display text-sm ${
-          isToday ? "font-bold text-success-foreground" : ""
+          isToday ? "font-bold text-success" : ""
         } ${isPast && inMonth ? "text-muted-foreground" : ""}`}
       >
         {d.getDate()}
