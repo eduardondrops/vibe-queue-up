@@ -379,7 +379,7 @@ function Calendar({
           </div>
         )}
 
-        <TodayPreview summary={todaySummary} loading={loading} />
+        <TodayPreview summary={todaySummary} loading={loading} previewUrls={previewUrls} />
 
         <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
           {["D", "S", "T", "Q", "Q", "S", "S"].map((d, i) => (
@@ -588,9 +588,11 @@ function CalendarCell({
 function TodayPreview({
   summary,
   loading,
+  previewUrls,
 }: {
   summary: DaySummary | undefined;
   loading: boolean;
+  previewUrls: Record<string, string>;
 }) {
   const videos = summary?.videos ?? [];
   return (
@@ -611,7 +613,19 @@ function TodayPreview({
           {videos.map((video) => {
             const isOverdue = video.status === "pending" && new Date(video.scheduled_at).getTime() <= Date.now();
             return (
-              <div key={video.id} className="rounded-xl border border-border bg-background/60 p-3">
+              <div key={video.id} className="overflow-hidden rounded-xl border border-border bg-background/60">
+                {previewUrls[video.id] && (
+                  <div className="aspect-video bg-muted">
+                    <video
+                      src={previewUrls[video.id]}
+                      preload="metadata"
+                      muted
+                      playsInline
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                )}
+                <div className="p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <span className="font-display text-sm font-bold">{slotLabelForDate(video.scheduled_at)}</span>
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${isOverdue ? "bg-destructive/15 text-destructive" : video.status === "posted" ? "bg-success/15 text-success" : "bg-primary/15 text-primary"}`}>
@@ -619,6 +633,7 @@ function TodayPreview({
                   </span>
                 </div>
                 <p className="line-clamp-2 text-sm text-foreground">{video.title}</p>
+                </div>
               </div>
             );
           })}
