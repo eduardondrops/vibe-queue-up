@@ -327,57 +327,24 @@ export async function markPosted(id: string): Promise<void> {
 
 /** Skip: unpin and let recompute push it to the next free slot after others. */
 export async function skipVideo(id: string, workspaceId: string): Promise<void> {
-  // Push it to the far future so the recompute treats it as last in chronological order.
-  const farFuture = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
-  const { error } = await supabase
-    .from("videos")
-    .update({ pinned: false, scheduled_at: farFuture })
-    .eq("id", id);
-  if (error) throw error;
-
-  await recomputeQueue(workspaceId);
+  await postponeOverdueVideo(id, workspaceId);
 }
 
 /**
- * Fila inteligente: detecta vídeos pendentes cujo horário + buffer já passou
- * sem terem sido marcados como postados, desafixa eles e empurra para o fim
- * da fila. O recomputeQueue em seguida realoca tudo para os próximos slots
- * livres, fazendo a agenda "rolar" sozinha.
- *
- * Buffer padrão: 30 minutos.
+ * The user answered "não postei" for an overdue video. Only then the queue
+ * rolls forward, placing this video in the next available slot from now.
  */
-export async function autoSkipOverdue(
+export async function postponeOverdueVideo(
+  id: string,
   workspaceId: string,
-  bufferMinutes = 30,
-): Promise<number> {
-  const cutoff = new Date(Date.now() - bufferMinutes * 60 * 1000).toISOString();
-  const { data: overdue } = await supabase
+): Promise<void> {
+  const { error } = await supabase
     .from("videos")
-    .select("id, scheduled_at")
-    .eq("workspace_id", workspaceId)
-    .eq("status", "pending")
-    .not("scheduled_at", "is", null)
-    .lt("scheduled_at", cutoff);
+    .update({ pinned: false })
+    .eq("id", id);
+  if (error) throw error;
 
-  if (!overdue || overdue.length === 0) return 0;
-
-  // Empurra cada um para um futuro distante, escalonando para preservar a ordem relativa.
-  // O recompute em seguida vai colocá-los nos próximos slots livres na mesma ordem.
-  const baseFuture = Date.now() + 365 * 24 * 60 * 60 * 1000;
-  await Promise.all(
-    overdue.map((v, idx) =>
-      supabase
-        .from("videos")
-        .update({
-          pinned: false,
-          scheduled_at: new Date(baseFuture + idx * 60 * 1000).toISOString(),
-        })
-        .eq("id", v.id),
-    ),
-  );
-
-  await recomputeQueue(workspaceId);
-  return overdue.length;
+  await recomputeQueue(workspaceId, { reflowOverdueIds: new Set([id]) });
 }
 
 
