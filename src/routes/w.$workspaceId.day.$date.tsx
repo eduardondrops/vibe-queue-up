@@ -13,7 +13,7 @@ import {
   type Slot,
 } from "@/lib/scheduling";
 import { getWorkspaceSchedule } from "@/lib/workspace-schedule";
-import { markPosted, moveVideoToSlot, postponeOverdueVideo, recomputeQueue, type QueueVideo } from "@/lib/queue";
+import { deleteVideo, markPosted, moveVideoToSlot, postponeOverdueVideo, recomputeQueue, type QueueVideo } from "@/lib/queue";
 import { getMyRole, getWorkspace, type Workspace } from "@/lib/workspaces";
 import { generateCaption, buildYouTube } from "@/lib/captions";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ import {
   DownloadCloud,
   Check,
   SkipForward,
+  Trash2,
   Loader2,
   Move,
   Pin,
@@ -238,6 +239,20 @@ function DayList({
     }
   }
 
+  async function handleDelete(id: string) {
+    if (!window.confirm("Excluir este vídeo da fila?")) return;
+    setBusyId(id);
+    try {
+      await deleteVideo(id);
+      toast.success("Vídeo excluído");
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao excluir");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function handleMove(videoId: string, targetIso: string) {
     setBusyId(videoId);
     try {
@@ -362,6 +377,7 @@ function DayList({
                     isOverdue={isOverdue}
                     onPosted={() => handlePosted(video.id)}
                     onSkip={() => handleSkip(video.id)}
+                    onDelete={() => handleDelete(video.id)}
                     onMove={(targetIso) => handleMove(video.id, targetIso)}
                     onTogglePin={() => handleTogglePin(video.id, video.pinned)}
                     onEdit={() => setEditingId(video.id)}
